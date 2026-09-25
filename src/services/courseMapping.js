@@ -207,6 +207,139 @@ export function normalizeCode(code) {
   return code.toUpperCase().replace(/\s+/g, '').trim();
 }
 
+// LocalStorage key for persisting custom prerequisite links
+export const PREREQUISITE_STORAGE_KEY = 'degree_custom_prerequisite_links';
+
+// Synchronous local storage loader for instant initial render
+export function loadPrerequisiteLinks() {
+  try {
+    const saved = localStorage.getItem(PREREQUISITE_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load prerequisite links from localStorage:', err);
+  }
+  return [...PREREQUISITE_LINKS];
+}
+
+// Fetch persisted prerequisites from local file /prerequisites.json (cache-busted)
+export async function fetchFilePrerequisiteLinks() {
+  try {
+    const res = await fetch(`/prerequisites.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (res.ok) {
+      const links = await res.json();
+      if (Array.isArray(links) && links.length > 0) {
+        // Also keep localStorage in sync
+        try {
+          localStorage.setItem(PREREQUISITE_STORAGE_KEY, JSON.stringify(links));
+        } catch (_) {}
+        return links;
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch /prerequisites.json:', err);
+  }
+  return null;
+}
+
+// Save prerequisite links to both localStorage and local file public/prerequisites.json
+export async function savePrerequisiteLinks(links) {
+  // 1. Always save immediately to localStorage
+  try {
+    localStorage.setItem(PREREQUISITE_STORAGE_KEY, JSON.stringify(links));
+  } catch (err) {
+    console.error('Failed to save prerequisite links to localStorage:', err);
+  }
+
+  // 2. Persist to local project file public/prerequisites.json via dev server endpoint
+  try {
+    const res = await fetch('/api/save-prerequisites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(links)
+    });
+    if (res.ok) {
+      console.log(`Saved ${links.length} prerequisite rules directly to local file public/prerequisites.json`);
+      return { success: true, localFile: true };
+    }
+  } catch (err) {
+    console.warn('Dev server file write endpoint unavailable, saved to browser localStorage:', err);
+  }
+
+  return { success: true, localFile: false };
+}
+
+// Download prerequisites as a JSON file to the user's computer
+export function downloadPrerequisitesJson(links) {
+  const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(links, null, 2));
+  const dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute('href', dataStr);
+  dlAnchor.setAttribute('download', 'degree_prerequisites.json');
+  document.body.appendChild(dlAnchor);
+  dlAnchor.click();
+  dlAnchor.remove();
+}
+
+// Set current prerequisite links as the new permanent default
+export async function makeDefaultPrerequisiteLinks(links) {
+  // 1. Update localStorage
+  try {
+    localStorage.setItem(PREREQUISITE_STORAGE_KEY, JSON.stringify(links));
+  } catch (err) {
+    console.error('Failed to update localStorage:', err);
+  }
+
+  // 2. Persist to public/prerequisites.json and codebase defaults via server endpoint
+  try {
+    const res = await fetch('/api/set-default-prerequisites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(links)
+    });
+    if (res.ok) {
+      console.log(`Saved ${links.length} rules as the new permanent default.`);
+      return { success: true, localFile: true };
+    }
+  } catch (err) {
+    console.warn('Could not post to /api/set-default-prerequisites:', err);
+  }
+  return { success: true, localFile: false };
+}
+export async function resetPrerequisiteLinks() {
+  try {
+    localStorage.removeItem(PREREQUISITE_STORAGE_KEY);
+  } catch (err) {
+    console.error('Failed to reset prerequisite links in localStorage:', err);
+  }
+
+  // Reset file on disk to PREREQUISITE_LINKS defaults
+  try {
+    await fetch('/api/save-prerequisites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(PREREQUISITE_LINKS)
+    });
+  } catch (_) {}
+
+  return [...PREREQUISITE_LINKS];
+}
+
+// Get courses that are required before taking `code`
+export function getCourseRequires(code, links = PREREQUISITE_LINKS) {
+  const norm = normalizeCode(code);
+  return links.filter(l => normalizeCode(l.to) === norm).map(l => l.from);
+}
+
+// Get courses that `code` unlocks
+export function getCourseUnlocks(code, links = PREREQUISITE_LINKS) {
+  const norm = normalizeCode(code);
+  return links.filter(l => normalizeCode(l.from) === norm).map(l => l.to);
+}
+
 // Flat list of all 60 courses with prerequisite mappings
 export const ALL_COURSES = DEGREE_STRUCTURE.flatMap(lvl =>
   lvl.semesters.flatMap(sem => sem.courses.map(c => {
@@ -216,4 +349,49 @@ export const ALL_COURSES = DEGREE_STRUCTURE.flatMap(lvl =>
     return { ...c, level: lvl.level, semester: sem.semester, requires, unlocks };
   }))
 );
+
+/**
+ * Check if all prerequisites of a course are satisfied (passed with points > 0)
+ * Returns { canTake: boolean, missingPrereqs: string[] }
+ */
+export function checkPrerequisitesMet(courseCode, studentCourseMap = {}, links = PREREQUISITE_LINKS) {
+  const norm = normalizeCode(courseCode);
+  const requires = links
+    .filter(l => normalizeCode(l.to) === norm)
+    .map(l => l.from);
+
+  if (!requires || requires.length === 0) {
+    return { canTake: true, missingPrereqs: [] };
+  }
+
+  const missingPrereqs = [];
+
+  for (const reqCode of requires) {
+    const reqNorm = normalizeCode(reqCode);
+    let record = studentCourseMap[reqNorm];
+
+    // Check aliases if direct code match not found
+    if (!record) {
+      const matchCourse = ALL_COURSES.find(c => normalizeCode(c.code) === reqNorm);
+      if (matchCourse && matchCourse.aliases) {
+        for (const alias of matchCourse.aliases) {
+          if (studentCourseMap[normalizeCode(alias)]) {
+            record = studentCourseMap[normalizeCode(alias)];
+            break;
+          }
+        }
+      }
+    }
+
+    const isPassed = record && record.isPassed && record.points > 0.00;
+    if (!isPassed) {
+      missingPrereqs.push(reqCode);
+    }
+  }
+
+  return {
+    canTake: missingPrereqs.length === 0,
+    missingPrereqs
+  };
+}
 

@@ -61,6 +61,22 @@ export default function StudentTabs({ students, activeIndex, onSelectTab }) {
                 {student.failedCount}✗
               </span>
             )}
+
+            {student.selectedCourseCodes && student.selectedCourseCodes.length > 0 && (
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.2rem',
+                fontSize: '0.7rem',
+                padding: '0.1rem 0.4rem',
+                borderRadius: '9999px',
+                background: 'rgba(16, 185, 129, 0.2)',
+                color: '#10b981',
+                fontWeight: 700
+              }}>
+                {student.selectedCourseCodes.length}★
+              </span>
+            )}
           </button>
         );
       })}

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { parseTranscriptPdf } from './services/pdfParser.js';
 import { generatePreservedExcelWorkbook, generateSingleSheetCombinedWorkbook } from './services/excelProcessor.js';
+import { normalizeCode, ALL_COURSES, loadPrerequisiteLinks, savePrerequisiteLinks, resetPrerequisiteLinks, fetchFilePrerequisiteLinks, downloadPrerequisitesJson, makeDefaultPrerequisiteLinks, checkPrerequisitesMet } from './services/courseMapping.js';
 import StudentHeader from './components/StudentHeader.jsx';
 import DegreeGrid from './components/DegreeGrid.jsx';
 import UploadZone from './components/UploadZone.jsx';
 import StudentTabs from './components/StudentTabs.jsx';
 import ExportControls from './components/ExportControls.jsx';
-import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText } from 'lucide-react';
+import PrerequisiteEditorModal from './components/PrerequisiteEditorModal.jsx';
+import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork } from 'lucide-react';
 
 export default function App() {
   const [templateBuffer, setTemplateBuffer] = useState(null);
@@ -17,6 +19,53 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [theme, setTheme] = useState('dark');
   const [statusMessage, setStatusMessage] = useState('');
+  
+  // Prerequisite links state (persisted in localStorage + public/prerequisites.json local file)
+  const [prerequisiteLinks, setPrerequisiteLinks] = useState(() => loadPrerequisiteLinks());
+  const [isPrereqModalOpen, setIsPrereqModalOpen] = useState(false);
+  const [initialPrereqModalCourse, setInitialPrereqModalCourse] = useState(null);
+
+  // Load persisted prerequisites from local file on start (syncs across browsers)
+  useEffect(() => {
+    async function loadInitialPrerequisites() {
+      const fileLinks = await fetchFilePrerequisiteLinks();
+      if (fileLinks && Array.isArray(fileLinks) && fileLinks.length > 0) {
+        setPrerequisiteLinks(fileLinks);
+        console.log(`Loaded ${fileLinks.length} prerequisite rules from local file /prerequisites.json`);
+      }
+    }
+    loadInitialPrerequisites();
+  }, []);
+
+  // Prerequisite link handlers
+  const handleSavePrerequisites = async (newLinks) => {
+    const result = await savePrerequisiteLinks(newLinks);
+    setPrerequisiteLinks(newLinks);
+    if (result?.localFile) {
+      setStatusMessage(`Prerequisite links saved to local file & browser (${newLinks.length} connections).`);
+    } else {
+      setStatusMessage(`Prerequisite links saved (${newLinks.length} connections).`);
+    }
+  };
+
+  const handleMakeDefaultPrerequisites = async (linksToSetDefault) => {
+    const result = await makeDefaultPrerequisiteLinks(linksToSetDefault);
+    setPrerequisiteLinks(linksToSetDefault);
+    setStatusMessage(`Saved current prerequisite links (${linksToSetDefault.length} connections) as the permanent default!`);
+    return result;
+  };
+
+  const handleResetPrerequisites = async () => {
+    const defaults = await resetPrerequisiteLinks();
+    setPrerequisiteLinks(defaults);
+    setStatusMessage(`Prerequisite links reset to default curriculum (${defaults.length} connections).`);
+    return defaults;
+  };
+
+  const handleOpenPrereqModal = (courseCode = null) => {
+    setInitialPrereqModalCourse(courseCode);
+    setIsPrereqModalOpen(true);
+  };
 
   // Set initial theme
   useEffect(() => {
@@ -53,7 +102,10 @@ export default function App() {
       for (const file of files) {
         const buffer = await file.arrayBuffer();
         const parsed = await parseTranscriptPdf(buffer, file.name);
-        newStudents.push(parsed);
+        newStudents.push({
+          ...parsed,
+          selectedCourseCodes: []
+        });
       }
 
       setStudents(prev => {
@@ -62,7 +114,10 @@ export default function App() {
         for (const s of newStudents) {
           const existingIdx = combined.findIndex(x => x.studentId && x.studentId === s.studentId);
           if (existingIdx >= 0) {
-            combined[existingIdx] = s;
+            combined[existingIdx] = {
+              ...s,
+              selectedCourseCodes: combined[existingIdx].selectedCourseCodes || []
+            };
           } else {
             combined.push(s);
           }
@@ -89,6 +144,136 @@ export default function App() {
       console.error('Failed to load custom template:', err);
       setStatusMessage(`Error loading template: ${err.message}`);
     }
+  };
+
+  // Toggle selection for a single course for the active student (blocks if prerequisites not passed)
+  const handleToggleCourseSelection = (courseCode) => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent) return;
+
+    const current = activeStudent.selectedCourseCodes || [];
+    const norm = normalizeCode(courseCode);
+    const exists = current.some(c => normalizeCode(c) === norm);
+
+    if (!exists) {
+      // Trying to check/select this course: verify prerequisites first!
+      const prereqCheck = checkPrerequisitesMet(courseCode, activeStudent.courseMap, prerequisiteLinks);
+      if (!prereqCheck.canTake) {
+        setStatusMessage(`Cannot check ${courseCode}: You have not passed its prerequisite(s) (${prereqCheck.missingPrereqs.join(', ')}).`);
+        return;
+      }
+    }
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+        const updated = exists
+          ? current.filter(c => normalizeCode(c) !== norm)
+          : [...current, courseCode];
+        return { ...s, selectedCourseCodes: updated };
+      });
+    });
+  };
+
+  // Select all failed courses (0.00 points) for active student that satisfy prerequisites
+  const handleSelectAllFailed = () => {
+    let eligibleCount = 0;
+    let blockedCount = 0;
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+        const failedCodes = [];
+        for (const course of ALL_COURSES) {
+          const norm = normalizeCode(course.code);
+          let record = s.courseMap[norm];
+          if (!record && course.aliases) {
+            for (const alias of course.aliases) {
+              if (s.courseMap[normalizeCode(alias)]) {
+                record = s.courseMap[normalizeCode(alias)];
+                break;
+              }
+            }
+          }
+          if (record && record.points === 0.00) {
+            // Check prerequisites
+            const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
+            if (prereqCheck.canTake) {
+              failedCodes.push(course.code);
+              eligibleCount++;
+            } else {
+              blockedCount++;
+            }
+          }
+        }
+
+        const current = s.selectedCourseCodes || [];
+        const combined = Array.from(new Set([...current, ...failedCodes]));
+        return { ...s, selectedCourseCodes: combined };
+      });
+    });
+
+    if (blockedCount > 0) {
+      setStatusMessage(`Selected ${eligibleCount} failed course(s). ${blockedCount} course(s) were skipped because prerequisites were not passed.`);
+    } else {
+      setStatusMessage(`Added ${eligibleCount} failed courses (0.00) to checkpoint selections.`);
+    }
+  };
+
+  // Select all pending / not taken courses for active student that satisfy prerequisites
+  const handleSelectAllPending = () => {
+    let eligibleCount = 0;
+    let blockedCount = 0;
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+        const pendingCodes = [];
+        for (const course of ALL_COURSES) {
+          const norm = normalizeCode(course.code);
+          let record = s.courseMap[norm];
+          if (!record && course.aliases) {
+            for (const alias of course.aliases) {
+              if (s.courseMap[normalizeCode(alias)]) {
+                record = s.courseMap[normalizeCode(alias)];
+                break;
+              }
+            }
+          }
+          if (!record) {
+            // Check prerequisites
+            const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
+            if (prereqCheck.canTake) {
+              pendingCodes.push(course.code);
+              eligibleCount++;
+            } else {
+              blockedCount++;
+            }
+          }
+        }
+
+        const current = s.selectedCourseCodes || [];
+        const combined = Array.from(new Set([...current, ...pendingCodes]));
+        return { ...s, selectedCourseCodes: combined };
+      });
+    });
+
+    if (blockedCount > 0) {
+      setStatusMessage(`Selected ${eligibleCount} pending course(s). ${blockedCount} course(s) were skipped because prerequisites were not passed.`);
+    } else {
+      setStatusMessage(`Added ${eligibleCount} eligible pending courses to checkpoint selections.`);
+    }
+  };
+
+  // Clear selections for active student
+  const handleClearSelected = () => {
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+        return { ...s, selectedCourseCodes: [] };
+      });
+    });
+    setStatusMessage('Cleared course checkpoint selections.');
   };
 
   const handleExport = async (options, mode = 'multi') => {
@@ -176,6 +361,17 @@ export default function App() {
           <button
             type="button"
             className="btn btn-secondary"
+            onClick={() => handleOpenPrereqModal()}
+            title="Edit and manage prerequisite links for each subject"
+            style={{ fontSize: '0.85rem', padding: '0.5rem 0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
+          >
+            <GitFork size={16} style={{ color: '#818cf8' }} />
+            <span>Edit Prerequisites</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={toggleTheme}
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
             style={{ padding: '0.5rem', borderRadius: '10px' }}
@@ -232,10 +428,21 @@ export default function App() {
               onExport={handleExport}
               studentsCount={students.length}
               isExporting={isExporting}
+              selectedCount={activeStudent.selectedCourseCodes?.length || 0}
             />
 
             {/* Interactive Degree Curriculum Grid */}
-            <DegreeGrid student={activeStudent} />
+            <DegreeGrid
+              student={activeStudent}
+              prerequisiteLinks={prerequisiteLinks}
+              onOpenPrereqModal={handleOpenPrereqModal}
+              onSavePrerequisites={handleSavePrerequisites}
+              onResetPrerequisites={handleResetPrerequisites}
+              onToggleCourseSelection={handleToggleCourseSelection}
+              onSelectAllFailed={handleSelectAllFailed}
+              onSelectAllPending={handleSelectAllPending}
+              onClearSelected={handleClearSelected}
+            />
           </>
         )}
 
@@ -275,6 +482,17 @@ export default function App() {
       }}>
         East Port Said National University • Faculty of Engineering • Artificial Intelligence Degree Advising
       </footer>
+
+      {/* Prerequisite Editor Modal */}
+      <PrerequisiteEditorModal
+        isOpen={isPrereqModalOpen}
+        onClose={() => setIsPrereqModalOpen(false)}
+        initialCourseCode={initialPrereqModalCourse}
+        prerequisiteLinks={prerequisiteLinks}
+        onSavePrerequisites={handleSavePrerequisites}
+        onMakeDefault={handleMakeDefaultPrerequisites}
+        onResetPrerequisites={handleResetPrerequisites}
+      />
     </div>
   );
 }

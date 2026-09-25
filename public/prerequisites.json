@@ -1,0 +1,102 @@
+[
+  {
+    "from": "BSC 011",
+    "to": "BSC 012"
+  },
+  {
+    "from": "BSC 012",
+    "to": "BSC 111"
+  },
+  {
+    "from": "BSC 012",
+    "to": "BSC 112"
+  },
+  {
+    "from": "BSC 031",
+    "to": "BSC 032"
+  },
+  {
+    "from": "BSC 021",
+    "to": "BSC 022"
+  },
+  {
+    "from": "PRD 031",
+    "to": "PRD 041"
+  },
+  {
+    "from": "CCE 031",
+    "to": "CCE 111"
+  },
+  {
+    "from": "CCE 111",
+    "to": "CCE 112"
+  },
+  {
+    "from": "CCE 112",
+    "to": "CCE 211"
+  },
+  {
+    "from": "CCE 211",
+    "to": "CCE 212"
+  },
+  {
+    "from": "CCE 141",
+    "to": "CCE 142"
+  },
+  {
+    "from": "CCE 142",
+    "to": "CCE 241"
+  },
+  {
+    "from": "EPM 116",
+    "to": "EPM 117"
+  },
+  {
+    "from": "EPM 117",
+    "to": "EPM 213"
+  },
+  {
+    "from": "CCE 231",
+    "to": "CCE 232"
+  },
+  {
+    "from": "CCE 232",
+    "to": "CCE 331"
+  },
+  {
+    "from": "CCE 331",
+    "to": "CCE 332"
+  },
+  {
+    "from": "CCE 332",
+    "to": "CCE 333"
+  },
+  {
+    "from": "CCE 311",
+    "to": "CCE 312"
+  },
+  {
+    "from": "CCE 351",
+    "to": "CCE 352"
+  },
+  {
+    "from": "CCE 221",
+    "to": "CCE 222"
+  },
+  {
+    "from": "CCE 431",
+    "to": "CCE 432"
+  },
+  {
+    "from": "CCE 433",
+    "to": "CCE 436"
+  },
+  {
+    "from": "CCE 112",
+    "to": "CCE 231"
+  },
+  {
+    "from": "CCE 131",
+    "to": "CCE 231"
+  }
+]

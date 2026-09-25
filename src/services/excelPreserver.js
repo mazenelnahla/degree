@@ -57,7 +57,9 @@ function prepareStyles(stylesDoc, options = {}) {
     crossColor = 'FF000000', // Solid black (darker & high-contrast)
     crossStyle = 'medium',   // Medium line style for a thicker, darker cross
     failedRedFill = 'FFFFC7CE', // Standard Excel light red fill
-    failedRedText = 'FFC00000'  // Dark red bold text
+    failedRedText = 'FF9C0006', // Standard Excel dark red bold text
+    selectedGreenFill = 'FFC6EFCE', // Distinct vibrant light green fill
+    selectedGreenText = 'FF006100'  // Distinct deep bold green text
   } = options;
 
   const fontsEl = stylesDoc.getElementsByTagName('fonts')[0];
@@ -109,7 +111,27 @@ function prepareStyles(stylesDoc, options = {}) {
   redFontEl.appendChild(redNameEl);
 
   fontsEl.appendChild(redFontEl);
-  fontsEl.setAttribute('count', String(origFontsCount + 2));
+
+  // --- b2) Selected Subject Bold Green Font (for checked registered courses) ---
+  const greenFontId = origFontsCount + 2;
+  const greenFontEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'font');
+  const gbEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'b');
+  greenFontEl.appendChild(gbEl);
+
+  const greenSzEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'sz');
+  greenSzEl.setAttribute('val', '11');
+  greenFontEl.appendChild(greenSzEl);
+
+  const greenColorEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'color');
+  greenColorEl.setAttribute('rgb', selectedGreenText);
+  greenFontEl.appendChild(greenColorEl);
+
+  const greenNameEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'name');
+  greenNameEl.setAttribute('val', 'Calibri');
+  greenFontEl.appendChild(greenNameEl);
+
+  fontsEl.appendChild(greenFontEl);
+  fontsEl.setAttribute('count', String(origFontsCount + 3));
 
   // --- c) Failed Red Fill ---
   const redFillId = origFillsCount;
@@ -120,9 +142,20 @@ function prepareStyles(stylesDoc, options = {}) {
   fgEl.setAttribute('rgb', failedRedFill);
   pfEl.appendChild(fgEl);
   redFillEl.appendChild(pfEl);
-
   fillsEl.appendChild(redFillEl);
-  fillsEl.setAttribute('count', String(origFillsCount + 1));
+
+  // --- c2) Selected Green Fill (Checkpoint fill) ---
+  const greenFillId = origFillsCount + 1;
+  const greenFillEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'fill');
+  const gpfEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'patternFill');
+  gpfEl.setAttribute('patternType', 'solid');
+  const gfgEl = stylesDoc.createElementNS(SPREADSHEETML_NS, 'fgColor');
+  gfgEl.setAttribute('rgb', selectedGreenFill);
+  gpfEl.appendChild(gfgEl);
+  greenFillEl.appendChild(gpfEl);
+  fillsEl.appendChild(greenFillEl);
+
+  fillsEl.setAttribute('count', String(origFillsCount + 2));
 
   // --- d) Clone Borders with single diagonal "\" (diagonalDown="1") ---
   const origBorderEls = Array.from(bordersEl.getElementsByTagName('border'));
@@ -158,6 +191,7 @@ function prepareStyles(stylesDoc, options = {}) {
   const origXfCount = origXfEls.length;
   const strikeMap = {};
   const failedMap = {};
+  const selectedMap = {};
 
   origXfEls.forEach((xf, idx) => {
     const clonedXf = xf.cloneNode(true);
@@ -186,18 +220,35 @@ function prepareStyles(stylesDoc, options = {}) {
     cellXfsEl.appendChild(clonedXf);
   });
 
-  cellXfsEl.setAttribute('count', String(origXfCount * 3));
-  return { strikeMap, failedMap };
+  origXfEls.forEach((xf, idx) => {
+    const clonedXf = xf.cloneNode(true);
+    clonedXf.setAttribute('fontId', String(greenFontId));
+    clonedXf.setAttribute('fillId', String(greenFillId));
+    clonedXf.setAttribute('applyFont', '1');
+    clonedXf.setAttribute('applyFill', '1');
+
+    const newIdx = origXfCount * 3 + idx;
+    selectedMap[idx] = newIdx;
+    cellXfsEl.appendChild(clonedXf);
+  });
+
+  cellXfsEl.setAttribute('count', String(origXfCount * 4));
+  return { strikeMap, failedMap, selectedMap };
 }
 
 /**
  * Builds cell sets for a student with given row offset:
- * returns { cellsToCrossWithX, cellsToFailRed, gpaValuesMap }
+ * returns { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap }
  */
 function buildStudentCellMaps(student, offset = 0) {
   const cellsToCrossWithX = new Set();
   const cellsToFailRed = new Set();
+  const cellsToSelectGreen = new Set();
+  const checkpointTextMap = {};
   const gpaValuesMap = {};
+
+  // Set of normalized course codes that the user has selected/checkpointed
+  const selectedSet = new Set((student.selectedCourseCodes || []).map(normalizeCode));
 
   if (student.levelGpas) {
     student.levelGpas.forEach(lg => {
@@ -236,16 +287,23 @@ function buildStudentCellMaps(student, offset = 0) {
       expandCellRange(start, end).forEach(ref => allCourseRefs.push(offsetCellRef(ref, offset)));
     }
 
-    if (studentCourse) {
-      if (studentCourse.isPassed && studentCourse.points > 0.00) {
-        allCourseRefs.forEach(ref => cellsToCrossWithX.add(ref));
-      } else if (studentCourse.points === 0.00) {
-        allCourseRefs.forEach(ref => cellsToFailRed.add(ref));
-      }
+    const isSelected = selectedSet.has(normCode) || (course.aliases && course.aliases.some(a => selectedSet.has(normalizeCode(a))));
+
+    if (isSelected) {
+      // Checked / selected checkpoint subject: render bold in distinct color with checkmark prefix [✓]
+      allCourseRefs.forEach(ref => cellsToSelectGreen.add(ref));
+      const codeCellRef = offsetCellRef(course.codeCell, offset);
+      checkpointTextMap[codeCellRef] = `[✓] ${course.code}`;
+    } else if (studentCourse && studentCourse.isPassed && studentCourse.points > 0.00) {
+      // Passed courses remain crossed out with diagonal strike
+      allCourseRefs.forEach(ref => cellsToCrossWithX.add(ref));
+    } else if (studentCourse && studentCourse.points === 0.00) {
+      // 0.00 failed subject that has not been selected
+      allCourseRefs.forEach(ref => cellsToFailRed.add(ref));
     }
   }
 
-  return { cellsToCrossWithX, cellsToFailRed, gpaValuesMap };
+  return { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap };
 }
 
 function offsetCellRef(ref, offset) {
@@ -263,7 +321,7 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
 
   const stylesXmlStr = await zip.file('xl/styles.xml').async('text');
   const stylesDoc = parseXml(stylesXmlStr);
-  const { strikeMap, failedMap } = prepareStyles(stylesDoc, options);
+  const { strikeMap, failedMap, selectedMap } = prepareStyles(stylesDoc, options);
   zip.file('xl/styles.xml', serializeXml(stylesDoc));
 
   const templateSheetXml = await zip.file('xl/worksheets/sheet1.xml').async('text');
@@ -309,7 +367,7 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
     const sheetName = sanitizeSheetName(rawSheetName, existingSheetNames);
 
     const sheetDoc = parseXml(templateSheetXml);
-    const { cellsToCrossWithX, cellsToFailRed, gpaValuesMap } = buildStudentCellMaps(student, 0);
+    const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap } = buildStudentCellMaps(student, 0);
 
     const allCells = Array.from(sheetDoc.getElementsByTagName('c'));
     for (const c of allCells) {
@@ -348,11 +406,22 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
         const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
         vEl.textContent = gpaValuesMap[r];
         c.appendChild(vEl);
+      } else if (checkpointTextMap[r] !== undefined) {
+        // Add check point tag [✓] to the course code cell
+        c.setAttribute('t', 'inlineStr');
+        while (c.firstChild) c.removeChild(c.firstChild);
+        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+        tEl.textContent = checkpointTextMap[r];
+        isEl.appendChild(tEl);
+        c.appendChild(isEl);
       }
 
       const origS = parseInt(c.getAttribute('s') || '0', 10);
       if (cellsToCrossWithX.has(r)) {
         if (strikeMap[origS] !== undefined) c.setAttribute('s', String(strikeMap[origS]));
+      } else if (cellsToSelectGreen.has(r)) {
+        if (selectedMap[origS] !== undefined) c.setAttribute('s', String(selectedMap[origS]));
       } else if (cellsToFailRed.has(r)) {
         if (failedMap[origS] !== undefined) c.setAttribute('s', String(failedMap[origS]));
       }
@@ -424,7 +493,7 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
 
   const stylesXmlStr = await zip.file('xl/styles.xml').async('text');
   const stylesDoc = parseXml(stylesXmlStr);
-  const { strikeMap, failedMap } = prepareStyles(stylesDoc, options);
+  const { strikeMap, failedMap, selectedMap } = prepareStyles(stylesDoc, options);
   zip.file('xl/styles.xml', serializeXml(stylesDoc));
 
   const templateSheetXml = await zip.file('xl/worksheets/sheet1.xml').async('text');
@@ -456,7 +525,7 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
 
   studentTranscripts.forEach((student, sIdx) => {
     const offset = sIdx * ROW_BLOCK_SIZE;
-    const { cellsToCrossWithX, cellsToFailRed, gpaValuesMap } = buildStudentCellMaps(student, offset);
+    const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap } = buildStudentCellMaps(student, offset);
 
     // 1. Append Rows for this student
     templateRows.forEach((origRow) => {
@@ -518,10 +587,22 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
           vEl.textContent = gpaValuesMap[newRef];
           c.appendChild(vEl);
         }
+        // Update checkpoint label [✓]
+        else if (checkpointTextMap[newRef] !== undefined) {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = checkpointTextMap[newRef];
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        }
 
         const origS = parseInt(c.getAttribute('s') || '0', 10);
         if (cellsToCrossWithX.has(newRef)) {
           if (strikeMap[origS] !== undefined) c.setAttribute('s', String(strikeMap[origS]));
+        } else if (cellsToSelectGreen.has(newRef)) {
+          if (selectedMap[origS] !== undefined) c.setAttribute('s', String(selectedMap[origS]));
         } else if (cellsToFailRed.has(newRef)) {
           if (failedMap[origS] !== undefined) c.setAttribute('s', String(failedMap[origS]));
         }

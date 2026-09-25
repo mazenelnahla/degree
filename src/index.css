@@ -392,3 +392,84 @@ button, input, select {
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border-color);
 }
+
+/* Selected Checkpointed Course Card */
+.course-card.selected-checkpoint {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 2px solid #10b981 !important;
+  box-shadow: 0 0 22px rgba(16, 185, 129, 0.3) !important;
+}
+
+[data-theme="light"] .course-card.selected-checkpoint {
+  background: #ecfdf5 !important;
+  border: 2px solid #059669 !important;
+  box-shadow: 0 2px 12px rgba(5, 150, 105, 0.2) !important;
+}
+
+.course-card.selected-checkpoint .course-code {
+  color: #10b981 !important;
+  font-weight: 800 !important;
+}
+
+[data-theme="light"] .course-card.selected-checkpoint .course-code {
+  color: #047857 !important;
+}
+
+.course-card.selected-checkpoint .course-name {
+  color: #6ee7b7 !important;
+  font-weight: 600 !important;
+}
+
+[data-theme="light"] .course-card.selected-checkpoint .course-name {
+  color: #065f46 !important;
+}
+
+.checkpoint-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  background: #10b981;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+}
+
+.course-checkbox-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 6px;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.course-checkbox-btn:hover {
+  transform: scale(1.15);
+}
+
+.course-checkbox-btn.disabled-lock {
+  cursor: not-allowed !important;
+  opacity: 0.85;
+}
+
+.course-checkbox-btn.disabled-lock:hover {
+  transform: scale(1.1);
+}
+
+.course-card.prereq-blocked {
+  border-style: dashed !important;
+  border-color: rgba(245, 158, 11, 0.45) !important;
+}
+
+[data-theme="light"] .course-card.prereq-blocked {
+  background: #fffbeb !important;
+  border-color: rgba(217, 119, 6, 0.4) !important;
+}

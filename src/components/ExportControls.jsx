@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2 } from 'lucide-react';
+import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2, CheckSquare, Sparkles } from 'lucide-react';
 
-export default function ExportControls({ onExport, studentsCount, isExporting }) {
+export default function ExportControls({ onExport, studentsCount, isExporting, selectedCount = 0 }) {
   const [showOptions, setShowOptions] = useState(false);
   const [options, setOptions] = useState({
     useStrikethrough: true,
@@ -41,9 +41,17 @@ export default function ExportControls({ onExport, studentsCount, isExporting })
             <FileSpreadsheet size={20} />
           </div>
           <div>
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
-              Export Processed Excel Workbook
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+                Export Processed Excel Workbook
+              </h3>
+              {selectedCount > 0 && (
+                <span className="checkpoint-badge" style={{ fontSize: '0.65rem', padding: '0.15rem 0.5rem' }}>
+                  <CheckSquare size={11} />
+                  <span>{selectedCount} Checkpointed Subject{selectedCount > 1 ? 's' : ''}</span>
+                </span>
+              )}
+            </div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               <strong>{studentsCount}</strong> student transcript{studentsCount > 1 ? 's' : ''} loaded • Choose export format below:
             </p>
@@ -134,6 +142,10 @@ export default function ExportControls({ onExport, studentsCount, isExporting })
             />
             <span>Highlight 0.00 failed courses in RED</span>
           </label>
+
+          <div style={{ fontSize: '0.8rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span>✓ Checkpointed subjects exported with sage highlight &amp; [✓] tag</span>
+          </div>
 
           <div style={{ fontSize: '0.8rem', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <span>✓ All 55 arrow connectors preserved in both export modes</span>

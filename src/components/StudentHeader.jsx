@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock } from 'lucide-react';
+import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare } from 'lucide-react';
 
 export default function StudentHeader({ student }) {
   if (!student) return null;
@@ -127,6 +127,30 @@ export default function StudentHeader({ student }) {
                 </div>
               </div>
             </div>
+
+            {/* Newly Selected Checkpoint Subjects */}
+            {student.selectedCourseCodes && student.selectedCourseCodes.length > 0 && (
+              <div style={{
+                padding: '0.6rem 1rem',
+                borderRadius: '12px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                border: '1px solid rgba(16, 185, 129, 0.4)',
+                boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.6rem'
+              }}>
+                <CheckSquare size={18} style={{ color: '#10b981' }} />
+                <div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#10b981', lineHeight: 1 }}>
+                    {student.selectedCourseCodes.length}
+                  </div>
+                  <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: '#10b981', fontWeight: 700 }}>
+                    Checkpointed
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Achieved Credit Hours */}
             <div style={{
