@@ -7,7 +7,7 @@ import {
   generateSingleSheetRegistrationWorkbook
 } from './services/excelProcessor.js';
 import { parseStudentRosterExcel, normalizeStudentId } from './services/rosterParser.js';
-import { normalizeCode, ALL_COURSES, loadPrerequisiteLinks, savePrerequisiteLinks, resetPrerequisiteLinks, fetchFilePrerequisiteLinks, downloadPrerequisitesJson, makeDefaultPrerequisiteLinks, checkPrerequisitesMet, getRegistrationLimit } from './services/courseMapping.js';
+import { normalizeCode, ALL_COURSES, loadPrerequisiteLinks, savePrerequisiteLinks, resetPrerequisiteLinks, fetchFilePrerequisiteLinks, downloadPrerequisitesJson, makeDefaultPrerequisiteLinks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason } from './services/courseMapping.js';
 
 import StudentHeader from './components/StudentHeader.jsx';
 import DegreeGrid from './components/DegreeGrid.jsx';
@@ -204,7 +204,7 @@ export default function App() {
     }
   };
 
-  // Toggle selection for a single course for the active student (blocks if prerequisites not passed or GPA limit exceeded)
+  // Toggle selection for a single course for the active student (blocks if prerequisites not passed, GPA limit exceeded, or season mismatch)
   const handleToggleCourseSelection = (courseCode) => {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
@@ -214,14 +214,23 @@ export default function App() {
     const exists = current.some(c => normalizeCode(c) === norm);
 
     if (!exists) {
-      // 1. Check GPA Course Registration Limits
+      // 1. Season constraint: Check if course is eligible for student's active registration season (Fall / Spring)
+      const activeSeason = getStudentRegistrationSeason(activeStudent);
+      const isEligibleSeason = isCourseEligibleForSeason(courseCode, activeSeason);
+      if (!isEligibleSeason) {
+        const courseSeason = getCourseSeason(courseCode);
+        setStatusMessage(`Cannot check ${courseCode}: It is a ${courseSeason} subject, but current registration season is ${activeSeason}. Only ${activeSeason} subjects can be selected.`);
+        return;
+      }
+
+      // 2. Check GPA Course Registration Limits
       const regLimit = getRegistrationLimit(activeStudent);
       if (current.length >= regLimit.maxCourses) {
         setStatusMessage(`Cannot check ${courseCode}: Maximum limit reached (${regLimit.maxCourses} subjects). ${regLimit.ruleText}.`);
         return;
       }
 
-      // 2. Verify prerequisites
+      // 3. Verify prerequisites
       const prereqCheck = checkPrerequisitesMet(courseCode, activeStudent.courseMap, prerequisiteLinks);
       if (!prereqCheck.canTake) {
         setStatusMessage(`Cannot check ${courseCode}: You have not passed its prerequisite(s) (${prereqCheck.missingPrereqs.join(', ')}).`);
@@ -240,15 +249,17 @@ export default function App() {
     });
   };
 
-  // Select all failed courses (0.00 points) for active student up to allowed GPA limit
+  // Select all failed courses (0.00 points) for active student matching active season up to allowed GPA limit
   const handleSelectAllFailed = () => {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
 
+    const activeSeason = getStudentRegistrationSeason(activeStudent);
     const regLimit = getRegistrationLimit(activeStudent);
     let eligibleCount = 0;
     let blockedPrereqCount = 0;
     let blockedLimitCount = 0;
+    let blockedSeasonCount = 0;
 
     setStudents(prev => {
       return prev.map((s, idx) => {
@@ -270,6 +281,12 @@ export default function App() {
             }
           }
           if (record && record.points === 0.00) {
+            // Season filter (allows Level 0 BSC 041, PRD 031, PRD 041, CCE 031 in either season)
+            if (!isCourseEligibleForSeason(course.code, activeSeason)) {
+              blockedSeasonCount++;
+              continue;
+            }
+
             // Check GPA Limit
             if (combined.length >= regLimit.maxCourses) {
               blockedLimitCount++;
@@ -291,9 +308,12 @@ export default function App() {
       });
     });
 
-    let msg = `Selected ${eligibleCount} failed course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    let msg = `Selected ${eligibleCount} failed ${activeSeason} course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    if (blockedSeasonCount > 0) {
+      msg += ` ${blockedSeasonCount} skipped (not ${activeSeason}).`;
+    }
     if (blockedLimitCount > 0) {
-      msg += ` ${blockedLimitCount} skipped due to GPA subject limit (${regLimit.maxCourses}).`;
+      msg += ` ${blockedLimitCount} skipped due to GPA limit (${regLimit.maxCourses}).`;
     }
     if (blockedPrereqCount > 0) {
       msg += ` ${blockedPrereqCount} skipped because prerequisites were not passed.`;
@@ -301,15 +321,17 @@ export default function App() {
     setStatusMessage(msg);
   };
 
-  // Select all pending / not taken courses for active student up to allowed GPA limit
+  // Select all pending / not taken courses for active student matching active season up to allowed GPA limit
   const handleSelectAllPending = () => {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
 
+    const activeSeason = getStudentRegistrationSeason(activeStudent);
     const regLimit = getRegistrationLimit(activeStudent);
     let eligibleCount = 0;
     let blockedPrereqCount = 0;
     let blockedLimitCount = 0;
+    let blockedSeasonCount = 0;
 
     setStudents(prev => {
       return prev.map((s, idx) => {
@@ -331,6 +353,12 @@ export default function App() {
             }
           }
           if (!record) {
+            // Season filter (allows Level 0 BSC 041, PRD 031, PRD 041, CCE 031 in either season)
+            if (!isCourseEligibleForSeason(course.code, activeSeason)) {
+              blockedSeasonCount++;
+              continue;
+            }
+
             // Check GPA Limit
             if (combined.length >= regLimit.maxCourses) {
               blockedLimitCount++;
@@ -352,9 +380,12 @@ export default function App() {
       });
     });
 
-    let msg = `Selected ${eligibleCount} pending course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    let msg = `Selected ${eligibleCount} pending ${activeSeason} course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    if (blockedSeasonCount > 0) {
+      msg += ` ${blockedSeasonCount} skipped (not ${activeSeason}).`;
+    }
     if (blockedLimitCount > 0) {
-      msg += ` ${blockedLimitCount} skipped due to GPA subject limit (${regLimit.maxCourses}).`;
+      msg += ` ${blockedLimitCount} skipped due to GPA limit (${regLimit.maxCourses}).`;
     }
     if (blockedPrereqCount > 0) {
       msg += ` ${blockedPrereqCount} skipped because prerequisites were not passed.`;
@@ -371,6 +402,119 @@ export default function App() {
       });
     });
     setStatusMessage('Cleared course checkpoint selections.');
+  };
+
+  // Select all eligible courses in a semester for the active student
+  const handleSelectSemesterCourses = (courses) => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent || !courses || courses.length === 0) return;
+
+    const activeSeason = getStudentRegistrationSeason(activeStudent);
+    const regLimit = getRegistrationLimit(activeStudent);
+    let newlySelectedCount = 0;
+    let blockedPrereqCount = 0;
+    let blockedLimitCount = 0;
+    let blockedSeasonCount = 0;
+    let alreadyPassedCount = 0;
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+        const current = s.selectedCourseCodes || [];
+        const combined = [...current];
+
+        for (const course of courses) {
+          const norm = normalizeCode(course.code);
+          if (combined.some(c => normalizeCode(c) === norm)) continue;
+
+          // Check if course matches active season (or is all-season interchangeable)
+          if (!isCourseEligibleForSeason(course.code, activeSeason)) {
+            blockedSeasonCount++;
+            continue;
+          }
+
+          // Check if already passed with points > 0
+          let record = s.courseMap[norm];
+          if (!record && course.aliases) {
+            for (const alias of course.aliases) {
+              if (s.courseMap[normalizeCode(alias)]) {
+                record = s.courseMap[normalizeCode(alias)];
+                break;
+              }
+            }
+          }
+
+          if (record && record.isPassed && record.points > 0.00) {
+            alreadyPassedCount++;
+            continue;
+          }
+
+          // Check registration limit
+          if (combined.length >= regLimit.maxCourses) {
+            blockedLimitCount++;
+            continue;
+          }
+
+          // Check prerequisites
+          const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
+          if (prereqCheck.canTake) {
+            combined.push(course.code);
+            newlySelectedCount++;
+          } else {
+            blockedPrereqCount++;
+          }
+        }
+
+        return { ...s, selectedCourseCodes: combined };
+      });
+    });
+
+    if (blockedSeasonCount > 0 && newlySelectedCount === 0) {
+      setStatusMessage(`Cannot select semester: These are not ${activeSeason} subjects. Only ${activeSeason} courses can be registered.`);
+      return;
+    }
+
+    let msg = `Selected ${newlySelectedCount} course(s) in semester.`;
+    if (blockedLimitCount > 0) {
+      msg += ` (${blockedLimitCount} skipped due to GPA limit of ${regLimit.maxCourses} courses).`;
+    }
+    if (blockedPrereqCount > 0) {
+      msg += ` (${blockedPrereqCount} skipped: prerequisites not met).`;
+    }
+    setStatusMessage(msg);
+  };
+
+  // Deselect / uncheck all courses of a semester
+  const handleDeselectSemesterCourses = (courses) => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent || !courses || courses.length === 0) return;
+
+    const semesterNormCodes = new Set();
+    courses.forEach(c => {
+      semesterNormCodes.add(normalizeCode(c.code));
+      if (c.aliases) {
+        c.aliases.forEach(a => semesterNormCodes.add(normalizeCode(a)));
+      }
+    });
+
+    let removedCount = 0;
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+        const current = s.selectedCourseCodes || [];
+        const filtered = current.filter(c => {
+          const norm = normalizeCode(c);
+          if (semesterNormCodes.has(norm)) {
+            removedCount++;
+            return false;
+          }
+          return true;
+        });
+        return { ...s, selectedCourseCodes: filtered };
+      });
+    });
+
+    setStatusMessage(`Deselected ${removedCount} course(s) in semester.`);
   };
 
   const handleExport = async (options, mode = 'multi') => {
@@ -599,6 +743,8 @@ export default function App() {
               onSelectAllFailed={handleSelectAllFailed}
               onSelectAllPending={handleSelectAllPending}
               onClearSelected={handleClearSelected}
+              onSelectSemesterCourses={handleSelectSemesterCourses}
+              onDeselectSemesterCourses={handleDeselectSemesterCourses}
             />
           </>
         )}

@@ -350,6 +350,99 @@ export const ALL_COURSES = DEGREE_STRUCTURE.flatMap(lvl =>
   }))
 );
 
+// Map of normalized course code -> course object for O(1) lookups
+const COURSE_LOOKUP_MAP = new Map();
+for (const c of ALL_COURSES) {
+  COURSE_LOOKUP_MAP.set(normalizeCode(c.code), c);
+  if (c.aliases) {
+    for (const a of c.aliases) {
+      COURSE_LOOKUP_MAP.set(normalizeCode(a), c);
+    }
+  }
+}
+
+/**
+ * In Level 0, these 4 subjects can be taken in either Fall or Spring:
+ * - BSC 041: Chemical Engineering (3 CH)
+ * - PRD 031: Engineering Drawing and Projection (3 CH)
+ * - PRD 041: Production Technology (3 CH)
+ * - CCE 031: Introduction to Computer Science (3 CH)
+ */
+export const LEVEL_0_ALL_SEASON_COURSES = new Set([
+  'BSC041',
+  'PRD031',
+  'PRD041',
+  'CCE031'
+]);
+
+/**
+ * Returns true if the course is allowed to be taken in both Fall and Spring semesters.
+ */
+export function isAllSeasonCourse(courseCode) {
+  return LEVEL_0_ALL_SEASON_COURSES.has(normalizeCode(courseCode));
+}
+
+/**
+ * Get primary curriculum season ('Fall', 'Spring', or 'Both') for a course code.
+ * Level 0 interchangeable courses return 'Both'.
+ * Otherwise: Semester 1 = Fall, Semester 2 = Spring.
+ */
+export function getCourseSeason(courseCode) {
+  const norm = normalizeCode(courseCode);
+  if (LEVEL_0_ALL_SEASON_COURSES.has(norm)) {
+    return 'Both';
+  }
+  const course = COURSE_LOOKUP_MAP.get(norm);
+  if (!course) return null;
+  return course.semester === 1 ? 'Fall' : course.semester === 2 ? 'Spring' : null;
+}
+
+/**
+ * Check if a course is eligible to be taken in the given active season ('Fall' or 'Spring').
+ * 'Both' (BSC 041, PRD 031, PRD 041, CCE 031) is eligible in both Fall and Spring.
+ */
+export function isCourseEligibleForSeason(courseCode, activeSeason) {
+  if (!activeSeason) return true;
+  const courseSeason = getCourseSeason(courseCode);
+  if (!courseSeason || courseSeason === 'Both') return true;
+  return courseSeason.toLowerCase() === activeSeason.toLowerCase();
+}
+
+/**
+ * Determine a student's active registration season ('Fall' or 'Spring').
+ * Priority:
+ * 1. If student already selected courses, infer from non-dual-season courses first.
+ * 2. If student has completed regular semesters, next registration is determined by curriculum progression:
+ *    - after Fall -> Spring
+ *    - after Spring -> Fall
+ * 3. Default to 'Fall' (1st semester of any level).
+ */
+export function getStudentRegistrationSeason(student) {
+  if (!student) return 'Fall';
+
+  // 1. If courses are already selected, infer active season from the first course with a dedicated season
+  const selected = student.selectedCourseCodes || [];
+  if (selected.length > 0) {
+    for (const code of selected) {
+      const s = getCourseSeason(code);
+      if (s && s !== 'Both') return s;
+    }
+  }
+
+  // 2. Infer from last recorded regular semester
+  const lastRegular = student.regularSemesters?.at(-1);
+  if (lastRegular) {
+    const semName = (lastRegular.semesterName || '').toLowerCase();
+    if (semName.includes('fall')) {
+      return 'Spring';
+    }
+    return 'Fall';
+  }
+
+  // 3. Fallback default
+  return 'Fall';
+}
+
 /**
  * Check if all prerequisites of a course are satisfied (passed with points > 0)
  * Returns { canTake: boolean, missingPrereqs: string[] }

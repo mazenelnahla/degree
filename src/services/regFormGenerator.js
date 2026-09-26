@@ -275,7 +275,7 @@ function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks = PREREQ
   }
 
   // 2. Populate Target Semester Courses (Rows 15-16, extensible to more if needed)
-  const levelRows = [15, 16];
+  const levelRows = [15, 16,17,18,19,20];
   levelRows.forEach((r, idx) => {
     const course = targetSemesterCourses[idx];
     const bCell = getTargetCell(`B${r}`);
@@ -316,8 +316,8 @@ function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks = PREREQ
     }
   });
 
-  // 3. Populate Other Courses (Failed / Previous terms, Rows 19-23)
-  const otherRows = [19, 20, 21, 22, 23];
+  // 3. Populate Other Courses (Failed / Previous terms, Rows 23-26)
+  const otherRows = [23, 24,25,26];
   otherRows.forEach((r, idx) => {
     const course = otherCourses[idx];
     const bCell = getTargetCell(`B${r}`);
@@ -515,7 +515,7 @@ export async function generateSingleSheetRegistrationWorkbook(regTemplateBuffer,
 
   // Height per student registration block:
   // 30 template rows + 2 blank separator rows = 32 rows per student
-  const ROW_BLOCK_SIZE = 32;
+  const ROW_BLOCK_SIZE = 34;
 
   // Stacking block for each student
   students.forEach((student, sIdx) => {

@@ -1,10 +1,11 @@
 import React from 'react';
-import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert } from 'lucide-react';
-import { getRegistrationLimit } from '../services/courseMapping.js';
+import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert, Calendar } from 'lucide-react';
+import { getRegistrationLimit, getStudentRegistrationSeason } from '../services/courseMapping.js';
 
 export default function StudentHeader({ student }) {
   if (!student) return null;
 
+  const activeSeason = getStudentRegistrationSeason(student);
   const aiLevel = student.aiLevel ?? Math.max(1, student.allSemesterTables?.length ?? 0);
   const aiLevelSuffix = aiLevel % 100 >= 11 && aiLevel % 100 <= 13
     ? 'th'
@@ -51,12 +52,27 @@ export default function StudentHeader({ student }) {
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+            <div style={{ display: 'flex', gap: '0.85rem', marginTop: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
               <span>Program: <strong style={{ color: 'var(--text-primary)' }}>{student.program || 'Artificial Intelligence'}</strong></span>
               <span>• <strong style={{ color: 'var(--text-primary)' }}>{aiLevel}{aiLevelSuffix} AI Level</strong></span>
               {student.admissionYear && (
                 <span>• Admission: <strong style={{ color: 'var(--text-primary)' }}>{student.admissionYear}</strong></span>
               )}
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+                padding: '0.12rem 0.55rem',
+                borderRadius: '6px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                background: activeSeason === 'Fall' ? 'rgba(249, 115, 22, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                color: activeSeason === 'Fall' ? '#fb923c' : '#60a5fa',
+                border: `1px solid ${activeSeason === 'Fall' ? 'rgba(249, 115, 22, 0.35)' : 'rgba(59, 130, 246, 0.35)'}`
+              }}>
+                <Calendar size={12} />
+                <span>Active Registration: {activeSeason} Term</span>
+              </span>
             </div>
           </div>
         </div>

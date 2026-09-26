@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { DEGREE_STRUCTURE, ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet, getRegistrationLimit } from '../services/courseMapping.js';
-import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { DEGREE_STRUCTURE, ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason, isAllSeasonCourse } from '../services/courseMapping.js';
+import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, AlertTriangle, ShieldAlert, Calendar } from 'lucide-react';
 
 export default function DegreeGrid({
   student,
@@ -11,7 +11,9 @@ export default function DegreeGrid({
   onToggleCourseSelection,
   onSelectAllFailed,
   onSelectAllPending,
-  onClearSelected
+  onClearSelected,
+  onSelectSemesterCourses,
+  onDeselectSemesterCourses
 }) {
   const [selectedLevel, setSelectedLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all'); // all, selected, passed, failed, not_taken
@@ -25,6 +27,7 @@ export default function DegreeGrid({
   const selectedCodesSet = new Set((student.selectedCourseCodes || []).map(normalizeCode));
   const regLimit = getRegistrationLimit(student);
   const isLimitReached = selectedCodesSet.size >= regLimit.maxCourses;
+  const activeSeason = getStudentRegistrationSeason(student);
 
   // Filter levels
   const filteredLevels = DEGREE_STRUCTURE.filter(lvl => {
@@ -159,9 +162,9 @@ export default function DegreeGrid({
               className="btn btn-secondary"
               onClick={onSelectAllFailed}
               style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.12)', borderColor: 'rgba(239, 68, 68, 0.35)', color: '#fb7185' }}
-              title="Select all failed courses with 0.00 points for registration"
+              title={`Select all failed courses with 0.00 points for ${activeSeason} registration`}
             >
-              + Select All Failed ({student.failedCount})
+              + Select All Failed ({activeSeason})
             </button>
 
             <button
@@ -169,9 +172,9 @@ export default function DegreeGrid({
               className="btn btn-secondary"
               onClick={onSelectAllPending}
               style={{ fontSize: '0.78rem', padding: '0.3rem 0.75rem', borderRadius: '8px' }}
-              title="Select remaining unattempted curriculum courses"
+              title={`Select remaining unattempted curriculum courses for ${activeSeason}`}
             >
-              + Select All Pending
+              + Select All Pending ({activeSeason})
             </button>
 
             {student.selectedCourseCodes && student.selectedCourseCodes.length > 0 && (
@@ -187,6 +190,25 @@ export default function DegreeGrid({
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+            {/* Active Season Badge */}
+            <span style={{
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.65rem',
+              borderRadius: '999px',
+              background: activeSeason === 'Fall' ? 'rgba(249, 115, 22, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+              border: `1px solid ${activeSeason === 'Fall' ? 'rgba(249, 115, 22, 0.35)' : 'rgba(59, 130, 246, 0.35)'}`,
+              color: activeSeason === 'Fall' ? '#fb923c' : '#60a5fa',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem'
+            }}
+            title={`Active Registration Term: Only ${activeSeason} semester subjects can be selected.`}
+            >
+              <Calendar size={13} />
+              <span>Current Term: {activeSeason} Only</span>
+            </span>
+
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               Selected: <strong style={{ color: selectedCodesSet.size >= regLimit.maxCourses ? '#f59e0b' : selectedCodesSet.size > 0 ? '#10b981' : 'var(--text-muted)' }}>
                 {selectedCodesSet.size} / {regLimit.maxCourses}
@@ -245,6 +267,10 @@ export default function DegreeGrid({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Lock size={13} style={{ color: '#f59e0b' }} />
               <span><strong>Locked:</strong> Prerequisite not passed</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <span style={{ fontSize: '0.65rem', padding: '0.08rem 0.35rem', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.35)', color: '#34d399', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>Fall/Spring</span>
+              <span><strong>L0 Dual-Term:</strong> BSC 041, PRD 031, PRD 041, CCE 031</span>
             </div>
           </div>
 
@@ -316,6 +342,14 @@ export default function DegreeGrid({
 
                   const semGpaRecord = student.levelGpas?.find(lg => lg.level === lvl.level && lg.semester === sem.semester);
 
+                  // Calculate selection statistics for this semester
+                  const nonPassedCourses = sem.courses.filter(c => {
+                    const st = getCourseStatus(c);
+                    return st.status !== 'passed';
+                  });
+                  const selectedSemCoursesCount = sem.courses.filter(c => getCourseStatus(c).isSelected).length;
+                  const allEligibleSelected = nonPassedCourses.length > 0 && nonPassedCourses.every(c => getCourseStatus(c).isSelected);
+
                   return (
                     <div key={sem.semester} style={{
                       padding: '1rem',
@@ -323,8 +357,15 @@ export default function DegreeGrid({
                       borderRadius: '12px',
                       border: '1px solid var(--border-color)'
                     }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginBottom: '0.85rem',
+                        flexWrap: 'wrap',
+                        gap: '0.6rem'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                           <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                             {sem.title}
                           </h3>
@@ -346,6 +387,98 @@ export default function DegreeGrid({
                               (Pending)
                             </span>
                           )}
+
+                          {/* Semester Select All / Deselect Action Buttons */}
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginLeft: '0.25rem' }}>
+                            {(() => {
+                              const semSeason = sem.semester === 1 ? 'Fall' : sem.semester === 2 ? 'Spring' : null;
+                              const isSemSeasonBlocked = semSeason && activeSeason && semSeason.toLowerCase() !== activeSeason.toLowerCase();
+
+                              if (isSemSeasonBlocked) {
+                                return (
+                                  <span style={{
+                                    fontSize: '0.72rem',
+                                    color: 'var(--text-muted)',
+                                    padding: '0.15rem 0.5rem',
+                                    borderRadius: '6px',
+                                    background: 'rgba(255, 255, 255, 0.03)',
+                                    border: '1px dashed var(--border-color)',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.3rem'
+                                  }}
+                                  title={`Current registration season is ${activeSeason}. Only ${activeSeason} subjects can be registered.`}
+                                  >
+                                    <Lock size={12} style={{ opacity: 0.6 }} />
+                                    <span>Not in {activeSeason} Term</span>
+                                  </span>
+                                );
+                              }
+
+                              return (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectSemesterCourses && onSelectSemesterCourses(sem.courses)}
+                                    title={allEligibleSelected ? "All unpassed subjects in this semester are already selected" : `Select all subjects in ${sem.title}`}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.35rem',
+                                      padding: '0.22rem 0.6rem',
+                                      borderRadius: '6px',
+                                      fontSize: '0.74rem',
+                                      fontWeight: 600,
+                                      background: allEligibleSelected ? 'rgba(16, 185, 129, 0.18)' : 'rgba(99, 102, 241, 0.12)',
+                                      border: allEligibleSelected ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(99, 102, 241, 0.3)',
+                                      color: allEligibleSelected ? '#34d399' : '#818cf8',
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease'
+                                    }}
+                                  >
+                                    <CheckSquare size={13} />
+                                    <span>{allEligibleSelected ? 'All Selected' : 'Select Semester'}</span>
+                                    {selectedSemCoursesCount > 0 && !allEligibleSelected && (
+                                      <span style={{
+                                        fontSize: '0.68rem',
+                                        padding: '0.05rem 0.35rem',
+                                        borderRadius: '999px',
+                                        background: 'rgba(255,255,255,0.1)',
+                                        marginLeft: '0.15rem'
+                                      }}>
+                                        {selectedSemCoursesCount}/{sem.courses.length}
+                                      </span>
+                                    )}
+                                  </button>
+
+                                  {selectedSemCoursesCount > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeselectSemesterCourses && onDeselectSemesterCourses(sem.courses)}
+                                      title={`Uncheck selected subjects in ${sem.title}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.25rem',
+                                        padding: '0.22rem 0.5rem',
+                                        borderRadius: '6px',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 500,
+                                        background: 'rgba(239, 68, 68, 0.1)',
+                                        border: '1px solid rgba(239, 68, 68, 0.25)',
+                                        color: '#f87171',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                    >
+                                      <X size={12} />
+                                      <span>Clear</span>
+                                    </button>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
                         </div>
 
                         <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
@@ -376,14 +509,18 @@ export default function DegreeGrid({
 
                           // Check whether all prerequisites are met
                           const prereqStatus = checkPrerequisitesMet(course.code, student.courseMap, prerequisiteLinks);
+                          const courseSeason = getCourseSeason(course.code);
+                          const isEligibleSeason = isCourseEligibleForSeason(course.code, activeSeason);
+                          const isSeasonBlocked = !isPassed && !isSelected && !isEligibleSeason;
                           const isPrereqBlocked = !isPassed && !isSelected && !prereqStatus.canTake;
                           const isLimitBlocked = !isPassed && !isSelected && isLimitReached;
+                          const isDualSeason = isAllSeasonCourse(course.code);
 
                           return (
                             <div
                               key={course.code}
-                              className={`course-card ${isPassed ? 'passed' : ''} ${isZeroFailed ? 'failed-zero' : ''} ${isSelected ? 'selected-checkpoint' : ''} ${isPrereqBlocked ? 'prereq-blocked' : ''}`}
-                              onClick={() => setActiveCourseModal({ course, statusInfo, requires, unlocks, prereqStatus, isLimitBlocked, regLimit })}
+                              className={`course-card ${isPassed ? 'passed' : ''} ${isZeroFailed ? 'failed-zero' : ''} ${isSelected ? 'selected-checkpoint' : ''} ${isPrereqBlocked || isSeasonBlocked ? 'prereq-blocked' : ''}`}
+                              onClick={() => setActiveCourseModal({ course, statusInfo, requires, unlocks, prereqStatus, isLimitBlocked, isSeasonBlocked, activeSeason, regLimit })}
                               onMouseEnter={() => setHoveredCode(norm)}
                               onMouseLeave={() => setHoveredCode(null)}
                               style={{
@@ -391,7 +528,7 @@ export default function DegreeGrid({
                                 outline: isHovered ? '2px solid #6366f1' : isConnected ? '2px dashed #06b6d4' : 'none',
                                 transform: isHovered ? 'translateY(-3px)' : 'none',
                                 transition: 'all 0.2s ease',
-                                opacity: isPrereqBlocked || (isLimitBlocked && !isSelected) ? 0.72 : 1
+                                opacity: isPrereqBlocked || isSeasonBlocked || (isLimitBlocked && !isSelected) ? 0.72 : 1
                               }}
                             >
                               <div>
@@ -399,7 +536,19 @@ export default function DegreeGrid({
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                                     {/* Selection Checkbox for Failed or Pending Courses */}
                                     {!isPassed && (
-                                      isPrereqBlocked ? (
+                                      isSeasonBlocked ? (
+                                        <div
+                                          className="course-checkbox-btn disabled-lock"
+                                          title={`Cannot select: ${course.code} is a ${courseSeason} subject. Current term allows only ${activeSeason} subjects.`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            alert(`Cannot check ${course.code}: It is a ${courseSeason} subject. Current registration is for ${activeSeason} term only.`);
+                                          }}
+                                          style={{ cursor: 'not-allowed', color: 'var(--text-muted)', padding: '2px', opacity: 0.6 }}
+                                        >
+                                          <Lock size={15} />
+                                        </div>
+                                      ) : isPrereqBlocked ? (
                                         <div
                                           className="course-checkbox-btn disabled-lock"
                                           title={`Cannot select: Prerequisite(s) not passed (${prereqStatus.missingPrereqs.join(', ')})`}
@@ -428,7 +577,7 @@ export default function DegreeGrid({
                                           type="button"
                                           className="course-checkbox-btn"
                                           onClick={(e) => handleCardCheckboxClick(e, course.code, isPassed)}
-                                          title={isSelected ? 'Remove from registration checkpoint' : 'Select course for registration checkpoint'}
+                                          title={isSelected ? 'Remove from registration checkpoint' : `Select ${course.code} for registration checkpoint`}
                                           style={{ color: isSelected ? '#10b981' : isZeroFailed ? '#ef4444' : 'var(--text-muted)' }}
                                         >
                                           {isSelected ? (
@@ -445,9 +594,27 @@ export default function DegreeGrid({
                                     </span>
                                   </div>
 
-                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                                    {course.ch} CH
-                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    {isDualSeason && (
+                                      <span style={{
+                                        fontSize: '0.62rem',
+                                        padding: '0.1rem 0.35rem',
+                                        borderRadius: '4px',
+                                        background: 'rgba(16, 185, 129, 0.12)',
+                                        border: '1px solid rgba(16, 185, 129, 0.28)',
+                                        color: '#34d399',
+                                        fontWeight: 600,
+                                        fontFamily: 'var(--font-mono)'
+                                      }}
+                                      title="This subject can be registered in either Fall or Spring semester"
+                                      >
+                                        Fall/Spring
+                                      </span>
+                                    )}
+                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                                      {course.ch} CH
+                                    </span>
+                                  </div>
                                 </div>
 
                                 <div className="course-name" style={{ fontSize: '0.825rem', lineHeight: 1.3, marginBottom: '0.4rem' }}>
@@ -559,9 +726,12 @@ export default function DegreeGrid({
               (() => {
                 const isSelected = selectedCodesSet.has(normalizeCode(activeCourseModal.course.code));
                 const prereqStatus = checkPrerequisitesMet(activeCourseModal.course.code, student.courseMap, prerequisiteLinks);
+                const modalCourseSeason = getCourseSeason(activeCourseModal.course.code);
+                const isEligibleSeason = isCourseEligibleForSeason(activeCourseModal.course.code, activeSeason);
+                const isSeasonBlocked = !isSelected && !isEligibleSeason;
                 const isPrereqBlocked = !isSelected && !prereqStatus.canTake;
                 const isLimitBlocked = !isSelected && isLimitReached;
-                const isBlocked = isPrereqBlocked || isLimitBlocked;
+                const isBlocked = isSeasonBlocked || isPrereqBlocked || isLimitBlocked;
 
                 return (
                   <div style={{
@@ -593,11 +763,14 @@ export default function DegreeGrid({
                         alignItems: 'center',
                         gap: '0.4rem'
                       }}>
-                        {isPrereqBlocked && <Lock size={15} />}
-                        {!isPrereqBlocked && isLimitBlocked && <ShieldAlert size={15} />}
+                        {isSeasonBlocked && <Calendar size={15} />}
+                        {!isSeasonBlocked && isPrereqBlocked && <Lock size={15} />}
+                        {!isSeasonBlocked && !isPrereqBlocked && isLimitBlocked && <ShieldAlert size={15} />}
                         <span>
                           {isSelected
                             ? '✓ Checkpointed for Excel Sheet'
+                            : isSeasonBlocked
+                            ? `Cannot Check: ${modalCourseSeason} Course (Current Registration is ${activeSeason})`
                             : isPrereqBlocked
                             ? 'Cannot Check Course: Prerequisite(s) Missing'
                             : isLimitBlocked
@@ -606,7 +779,9 @@ export default function DegreeGrid({
                         </span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: isBlocked ? '#fbbf24' : 'var(--text-muted)', marginTop: '0.2rem' }}>
-                        {isPrereqBlocked
+                        {isSeasonBlocked
+                          ? `Students registering for ${activeSeason} semester can only select ${activeSeason} subjects.`
+                          : isPrereqBlocked
                           ? `You must pass prerequisite course(s) first: ${prereqStatus.missingPrereqs.join(', ')}`
                           : isLimitBlocked
                           ? regLimit.ruleText
@@ -630,6 +805,11 @@ export default function DegreeGrid({
                         <>
                           <CheckSquare size={15} />
                           <span>Selected (Remove)</span>
+                        </>
+                      ) : isSeasonBlocked ? (
+                        <>
+                          <Calendar size={15} />
+                          <span>{modalCourseSeason} Term Only</span>
                         </>
                       ) : isPrereqBlocked ? (
                         <>
