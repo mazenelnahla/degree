@@ -395,3 +395,153 @@ export function checkPrerequisitesMet(courseCode, studentCourseMap = {}, links =
   };
 }
 
+/**
+ * Determine maximum allowed course registration limit for a student based on academic GPA rules:
+ * - If semester GPA < 1.7: allow up to 4 subjects
+ * - If semester GPA >= 1.7 and cumulative GPA < 2.0: allow up to 5 subjects
+ * - If semester GPA >= 1.7 and cumulative GPA >= 2.0: allow up to 6 subjects
+ * - Default / fallback when no semester GPA available: based on CGPA (>= 2.0 -> 6, else 5)
+ */
+export function getRegistrationLimit(student) {
+  if (!student) {
+    return {
+      maxCourses: 6,
+      ruleText: 'Standard registration (up to 6 subjects allowed)',
+      semesterGpa: null,
+      cgpa: null,
+      tier: 'standard'
+    };
+  }
+
+  const cgpa = student.cgpa !== null && student.cgpa !== undefined ? Number(student.cgpa) : null;
+  const semGpa = student.latestSemesterGpa !== null && student.latestSemesterGpa !== undefined
+    ? Number(student.latestSemesterGpa)
+    : (student.regularSemesters?.at(-1)?.gpa !== undefined && student.regularSemesters?.at(-1)?.gpa !== null
+        ? Number(student.regularSemesters.at(-1).gpa)
+        : null);
+
+  // Rule 1: Semester GPA < 1.7 -> 4 subjects
+  if (semGpa !== null && semGpa < 1.7) {
+    return {
+      maxCourses: 4,
+      ruleText: `Semester GPA (${semGpa.toFixed(2)} < 1.70) limits registration to 4 subjects`,
+      semesterGpa: semGpa,
+      cgpa,
+      tier: 'strict_warning'
+    };
+  }
+
+  // Rule 2: Semester GPA >= 1.7 and Cumulative GPA < 2.0 -> 5 subjects
+  if (cgpa !== null && cgpa < 2.0) {
+    return {
+      maxCourses: 5,
+      ruleText: semGpa !== null
+        ? `Semester GPA (${semGpa.toFixed(2)} ≥ 1.70) & CGPA (${cgpa.toFixed(2)} < 2.00) limits registration to 5 subjects`
+        : `CGPA (${cgpa.toFixed(2)} < 2.00) limits registration to 5 subjects`,
+      semesterGpa: semGpa,
+      cgpa,
+      tier: 'academic_warning'
+    };
+  }
+
+  // Rule 3: Semester GPA >= 1.7 (or good standing) and Cumulative GPA >= 2.0 -> 6 subjects
+  return {
+    maxCourses: 6,
+    ruleText: semGpa !== null
+      ? `Semester GPA (${semGpa.toFixed(2)} ≥ 1.70) & CGPA (${cgpa !== null ? cgpa.toFixed(2) : '≥ 2.00'}) allows registering 6 subjects`
+      : `Good standing allows registering up to 6 subjects`,
+    semesterGpa: semGpa,
+    cgpa,
+    tier: 'good_standing'
+  };
+}
+
+/**
+ * Automatically assign courses for a student according to academic priorities:
+ * 1. Failed courses (0.00) that have satisfied prerequisites (highest priority to repair GPA)
+ * 2. Unattempted / pending courses in curriculum order whose prerequisites are satisfied
+ * 3. Strictly capped by the student's GPA registration limit (4, 5, or 6 subjects)
+ * Returns { assignedCodes: string[], limit: number, failedAssigned: number, pendingAssigned: number, skippedPrereq: number }
+ */
+export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUISITE_LINKS) {
+  if (!student) {
+    return { assignedCodes: [], limit: 6, failedAssigned: 0, pendingAssigned: 0, skippedPrereq: 0 };
+  }
+
+  const regLimit = getRegistrationLimit(student);
+  const maxCourses = regLimit.maxCourses;
+  const courseMap = student.courseMap || {};
+
+  const assigned = [];
+  const assignedNorms = new Set();
+  let skippedPrereq = 0;
+  let failedAssigned = 0;
+  let pendingAssigned = 0;
+
+  const candidateFailed = [];
+  const candidatePending = [];
+
+  // Categorize candidate courses
+  for (const course of ALL_COURSES) {
+    const norm = normalizeCode(course.code);
+    let record = courseMap[norm];
+    if (!record && course.aliases) {
+      for (const a of course.aliases) {
+        if (courseMap[normalizeCode(a)]) {
+          record = courseMap[normalizeCode(a)];
+          break;
+        }
+      }
+    }
+
+    // If passed with points > 0, cannot register
+    if (record && record.isPassed && record.points > 0.00) {
+      continue;
+    }
+
+    if (record && record.points === 0.00) {
+      candidateFailed.push(course);
+    } else if (!record) {
+      candidatePending.push(course);
+    }
+  }
+
+  // Priority 1: Failed courses with satisfied prerequisites
+  for (const course of candidateFailed) {
+    if (assigned.length >= maxCourses) break;
+    const prereqCheck = checkPrerequisitesMet(course.code, courseMap, prerequisiteLinks);
+    if (prereqCheck.canTake) {
+      assigned.push(course.code);
+      assignedNorms.add(normalizeCode(course.code));
+      failedAssigned++;
+    } else {
+      skippedPrereq++;
+    }
+  }
+
+  // Priority 2: Pending curriculum courses with satisfied prerequisites
+  for (const course of candidatePending) {
+    if (assigned.length >= maxCourses) break;
+    const norm = normalizeCode(course.code);
+    if (assignedNorms.has(norm)) continue;
+
+    const prereqCheck = checkPrerequisitesMet(course.code, courseMap, prerequisiteLinks);
+    if (prereqCheck.canTake) {
+      assigned.push(course.code);
+      assignedNorms.add(norm);
+      pendingAssigned++;
+    } else {
+      skippedPrereq++;
+    }
+  }
+
+  return {
+    assignedCodes: assigned,
+    limit: maxCourses,
+    failedAssigned,
+    pendingAssigned,
+    skippedPrereq,
+    ruleText: regLimit.ruleText
+  };
+}
+

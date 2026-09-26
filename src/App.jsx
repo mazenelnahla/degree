@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { parseTranscriptPdf } from './services/pdfParser.js';
-import { generatePreservedExcelWorkbook, generateSingleSheetCombinedWorkbook } from './services/excelProcessor.js';
-import { normalizeCode, ALL_COURSES, loadPrerequisiteLinks, savePrerequisiteLinks, resetPrerequisiteLinks, fetchFilePrerequisiteLinks, downloadPrerequisitesJson, makeDefaultPrerequisiteLinks, checkPrerequisitesMet } from './services/courseMapping.js';
+import {
+  generatePreservedExcelWorkbook,
+  generateSingleSheetCombinedWorkbook,
+  generateRegistrationWorkbook,
+  generateSingleSheetRegistrationWorkbook
+} from './services/excelProcessor.js';
+import { parseStudentRosterExcel, normalizeStudentId } from './services/rosterParser.js';
+import { normalizeCode, ALL_COURSES, loadPrerequisiteLinks, savePrerequisiteLinks, resetPrerequisiteLinks, fetchFilePrerequisiteLinks, downloadPrerequisitesJson, makeDefaultPrerequisiteLinks, checkPrerequisitesMet, getRegistrationLimit } from './services/courseMapping.js';
+
 import StudentHeader from './components/StudentHeader.jsx';
 import DegreeGrid from './components/DegreeGrid.jsx';
 import UploadZone from './components/UploadZone.jsx';
@@ -19,11 +26,54 @@ export default function App() {
   const [isExporting, setIsExporting] = useState(false);
   const [theme, setTheme] = useState('dark');
   const [statusMessage, setStatusMessage] = useState('');
+  const [rosterMap, setRosterMap] = useState(new Map());
+  const [rosterInfo, setRosterInfo] = useState(null);
   
   // Prerequisite links state (persisted in localStorage + public/prerequisites.json local file)
   const [prerequisiteLinks, setPrerequisiteLinks] = useState(() => loadPrerequisiteLinks());
   const [isPrereqModalOpen, setIsPrereqModalOpen] = useState(false);
   const [initialPrereqModalCourse, setInitialPrereqModalCourse] = useState(null);
+
+  // Handler for uploading Student ID <-> Student Name Excel roster
+  const handleRosterLoaded = async (file) => {
+    setIsLoading(true);
+    setStatusMessage(`Parsing student ID ↔ Name roster: ${file.name}...`);
+    try {
+      const buffer = await file.arrayBuffer();
+      const { idToNameMap, rosterCount } = await parseStudentRosterExcel(buffer);
+
+      setRosterMap(idToNameMap);
+      setRosterInfo({ fileName: file.name, count: rosterCount });
+
+      // Immediately re-assign names to already loaded students if they match
+      let updatedCount = 0;
+      setStudents(prev => {
+        return prev.map(s => {
+          const normId = normalizeStudentId(s.studentId);
+          if (normId && idToNameMap.has(normId)) {
+            const mappedName = idToNameMap.get(normId);
+            if (mappedName && mappedName !== s.studentName) {
+              updatedCount++;
+              return { ...s, studentName: mappedName };
+            }
+          }
+          return s;
+        });
+      });
+
+      let msg = `Loaded student roster (${rosterCount} students mapped from ${file.name}).`;
+      if (updatedCount > 0) {
+        msg += ` Updated ${updatedCount} currently loaded student(s) with their matched names!`;
+      }
+      setStatusMessage(msg);
+    } catch (err) {
+      console.error('Failed to parse student roster Excel:', err);
+      alert(`Could not parse student roster Excel: ${err.message}`);
+      setStatusMessage(`Error loading roster: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Load persisted prerequisites from local file on start (syncs across browsers)
   useEffect(() => {
@@ -102,8 +152,16 @@ export default function App() {
       for (const file of files) {
         const buffer = await file.arrayBuffer();
         const parsed = await parseTranscriptPdf(buffer, file.name);
+
+        let finalName = parsed.studentName;
+        const normId = normalizeStudentId(parsed.studentId);
+        if (normId && rosterMap.has(normId)) {
+          finalName = rosterMap.get(normId);
+        }
+
         newStudents.push({
           ...parsed,
+          studentName: finalName,
           selectedCourseCodes: []
         });
       }
@@ -146,7 +204,7 @@ export default function App() {
     }
   };
 
-  // Toggle selection for a single course for the active student (blocks if prerequisites not passed)
+  // Toggle selection for a single course for the active student (blocks if prerequisites not passed or GPA limit exceeded)
   const handleToggleCourseSelection = (courseCode) => {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
@@ -156,7 +214,14 @@ export default function App() {
     const exists = current.some(c => normalizeCode(c) === norm);
 
     if (!exists) {
-      // Trying to check/select this course: verify prerequisites first!
+      // 1. Check GPA Course Registration Limits
+      const regLimit = getRegistrationLimit(activeStudent);
+      if (current.length >= regLimit.maxCourses) {
+        setStatusMessage(`Cannot check ${courseCode}: Maximum limit reached (${regLimit.maxCourses} subjects). ${regLimit.ruleText}.`);
+        return;
+      }
+
+      // 2. Verify prerequisites
       const prereqCheck = checkPrerequisitesMet(courseCode, activeStudent.courseMap, prerequisiteLinks);
       if (!prereqCheck.canTake) {
         setStatusMessage(`Cannot check ${courseCode}: You have not passed its prerequisite(s) (${prereqCheck.missingPrereqs.join(', ')}).`);
@@ -175,17 +240,26 @@ export default function App() {
     });
   };
 
-  // Select all failed courses (0.00 points) for active student that satisfy prerequisites
+  // Select all failed courses (0.00 points) for active student up to allowed GPA limit
   const handleSelectAllFailed = () => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent) return;
+
+    const regLimit = getRegistrationLimit(activeStudent);
     let eligibleCount = 0;
-    let blockedCount = 0;
+    let blockedPrereqCount = 0;
+    let blockedLimitCount = 0;
 
     setStudents(prev => {
       return prev.map((s, idx) => {
         if (idx !== activeStudentIndex) return s;
-        const failedCodes = [];
+        const current = s.selectedCourseCodes || [];
+        const combined = [...current];
+
         for (const course of ALL_COURSES) {
           const norm = normalizeCode(course.code);
+          if (combined.some(c => normalizeCode(c) === norm)) continue;
+
           let record = s.courseMap[norm];
           if (!record && course.aliases) {
             for (const alias of course.aliases) {
@@ -196,41 +270,57 @@ export default function App() {
             }
           }
           if (record && record.points === 0.00) {
+            // Check GPA Limit
+            if (combined.length >= regLimit.maxCourses) {
+              blockedLimitCount++;
+              continue;
+            }
+
             // Check prerequisites
             const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
             if (prereqCheck.canTake) {
-              failedCodes.push(course.code);
+              combined.push(course.code);
               eligibleCount++;
             } else {
-              blockedCount++;
+              blockedPrereqCount++;
             }
           }
         }
 
-        const current = s.selectedCourseCodes || [];
-        const combined = Array.from(new Set([...current, ...failedCodes]));
         return { ...s, selectedCourseCodes: combined };
       });
     });
 
-    if (blockedCount > 0) {
-      setStatusMessage(`Selected ${eligibleCount} failed course(s). ${blockedCount} course(s) were skipped because prerequisites were not passed.`);
-    } else {
-      setStatusMessage(`Added ${eligibleCount} failed courses (0.00) to checkpoint selections.`);
+    let msg = `Selected ${eligibleCount} failed course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    if (blockedLimitCount > 0) {
+      msg += ` ${blockedLimitCount} skipped due to GPA subject limit (${regLimit.maxCourses}).`;
     }
+    if (blockedPrereqCount > 0) {
+      msg += ` ${blockedPrereqCount} skipped because prerequisites were not passed.`;
+    }
+    setStatusMessage(msg);
   };
 
-  // Select all pending / not taken courses for active student that satisfy prerequisites
+  // Select all pending / not taken courses for active student up to allowed GPA limit
   const handleSelectAllPending = () => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent) return;
+
+    const regLimit = getRegistrationLimit(activeStudent);
     let eligibleCount = 0;
-    let blockedCount = 0;
+    let blockedPrereqCount = 0;
+    let blockedLimitCount = 0;
 
     setStudents(prev => {
       return prev.map((s, idx) => {
         if (idx !== activeStudentIndex) return s;
-        const pendingCodes = [];
+        const current = s.selectedCourseCodes || [];
+        const combined = [...current];
+
         for (const course of ALL_COURSES) {
           const norm = normalizeCode(course.code);
+          if (combined.some(c => normalizeCode(c) === norm)) continue;
+
           let record = s.courseMap[norm];
           if (!record && course.aliases) {
             for (const alias of course.aliases) {
@@ -241,28 +331,35 @@ export default function App() {
             }
           }
           if (!record) {
+            // Check GPA Limit
+            if (combined.length >= regLimit.maxCourses) {
+              blockedLimitCount++;
+              continue;
+            }
+
             // Check prerequisites
             const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
             if (prereqCheck.canTake) {
-              pendingCodes.push(course.code);
+              combined.push(course.code);
               eligibleCount++;
             } else {
-              blockedCount++;
+              blockedPrereqCount++;
             }
           }
         }
 
-        const current = s.selectedCourseCodes || [];
-        const combined = Array.from(new Set([...current, ...pendingCodes]));
         return { ...s, selectedCourseCodes: combined };
       });
     });
 
-    if (blockedCount > 0) {
-      setStatusMessage(`Selected ${eligibleCount} pending course(s). ${blockedCount} course(s) were skipped because prerequisites were not passed.`);
-    } else {
-      setStatusMessage(`Added ${eligibleCount} eligible pending courses to checkpoint selections.`);
+    let msg = `Selected ${eligibleCount} pending course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    if (blockedLimitCount > 0) {
+      msg += ` ${blockedLimitCount} skipped due to GPA subject limit (${regLimit.maxCourses}).`;
     }
+    if (blockedPrereqCount > 0) {
+      msg += ` ${blockedPrereqCount} skipped because prerequisites were not passed.`;
+    }
+    setStatusMessage(msg);
   };
 
   // Clear selections for active student
@@ -315,6 +412,63 @@ export default function App() {
     } catch (err) {
       console.error('Export failed:', err);
       alert(`Export failed: ${err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Export official Registration Form (reg.xlsx template)
+  const handleExportRegistration = async (mode = 'single') => {
+    if (students.length === 0) {
+      alert('Please upload transcript PDFs first.');
+      return;
+    }
+
+    setIsExporting(true);
+    setStatusMessage(`Generating Registration Form Excel (${mode === 'single' ? 'Single Continuous Sheet' : 'Multi-Tab'})...`);
+    try {
+      // Fetch public/reg.xlsx
+      const res = await fetch(`/reg.xlsx?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error('Could not load /reg.xlsx template file. Please verify public/reg.xlsx exists.');
+      }
+      const regTemplateBuffer = await res.arrayBuffer();
+
+      let outputBuffer;
+      let fileName;
+
+      if (mode === 'single') {
+        outputBuffer = await generateSingleSheetRegistrationWorkbook(regTemplateBuffer, students, {
+          prerequisiteLinks
+        });
+        fileName = students.length === 1
+          ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Registration_Form_Single_Sheet.xlsx`
+          : `Registration_Forms_All_${students.length}_Students_Single_Sheet.xlsx`;
+      } else {
+        outputBuffer = await generateRegistrationWorkbook(regTemplateBuffer, students, {
+          prerequisiteLinks
+        });
+        fileName = students.length === 1
+          ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Registration_Form.xlsx`
+          : `Registration_Forms_All_${students.length}_Students_Multi_Tab.xlsx`;
+      }
+
+      const blob = new Blob([outputBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setStatusMessage(`Successfully generated and downloaded registration form: ${fileName}`);
+    } catch (err) {
+      console.error('Registration form export failed:', err);
+      alert(`Registration export failed: ${err.message}`);
     } finally {
       setIsExporting(false);
     }
@@ -387,8 +541,10 @@ export default function App() {
         <UploadZone
           onPdfsLoaded={handlePdfsLoaded}
           onTemplateLoaded={handleTemplateLoaded}
+          onRosterLoaded={handleRosterLoaded}
           hasTemplate={!!templateBuffer}
           templateName={templateName}
+          rosterInfo={rosterInfo}
           isLoading={isLoading}
         />
 
@@ -426,6 +582,7 @@ export default function App() {
             {/* Export Controls Bar */}
             <ExportControls
               onExport={handleExport}
+              onExportRegistration={handleExportRegistration}
               studentsCount={students.length}
               isExporting={isExporting}
               selectedCount={activeStudent.selectedCourseCodes?.length || 0}

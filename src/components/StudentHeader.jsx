@@ -1,5 +1,6 @@
 import React from 'react';
-import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare } from 'lucide-react';
+import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { getRegistrationLimit } from '../services/courseMapping.js';
 
 export default function StudentHeader({ student }) {
   if (!student) return null;
@@ -173,6 +174,49 @@ export default function StudentHeader({ student }) {
                 </div>
               </div>
             </div>
+
+            {/* GPA Registration Subject Limit */}
+            {(() => {
+              const regLimit = getRegistrationLimit(student);
+              const isWarning = regLimit.maxCourses < 6;
+              return (
+                <div
+                  title={regLimit.ruleText}
+                  style={{
+                    padding: '0.6rem 1rem',
+                    borderRadius: '12px',
+                    background: regLimit.tier === 'strict_warning'
+                      ? 'rgba(239, 68, 68, 0.12)'
+                      : regLimit.tier === 'academic_warning'
+                      ? 'rgba(245, 158, 11, 0.12)'
+                      : 'rgba(16, 185, 129, 0.12)',
+                    border: `1px solid ${regLimit.tier === 'strict_warning' ? 'rgba(239, 68, 68, 0.35)' : regLimit.tier === 'academic_warning' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.6rem'
+                  }}
+                >
+                  {isWarning ? (
+                    <ShieldAlert size={18} style={{ color: regLimit.tier === 'strict_warning' ? '#f43f5e' : '#f59e0b' }} />
+                  ) : (
+                    <ShieldCheck size={18} style={{ color: '#10b981' }} />
+                  )}
+                  <div>
+                    <div style={{
+                      fontSize: '1.1rem',
+                      fontWeight: 800,
+                      color: regLimit.tier === 'strict_warning' ? '#f43f5e' : regLimit.tier === 'academic_warning' ? '#f59e0b' : '#10b981',
+                      lineHeight: 1
+                    }}>
+                      {regLimit.maxCourses} Subjects
+                    </div>
+                    <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
+                      Registration Limit
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

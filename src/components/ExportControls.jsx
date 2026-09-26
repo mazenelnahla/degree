@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2, CheckSquare, Sparkles } from 'lucide-react';
+import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2, CheckSquare, Sparkles, ClipboardCheck } from 'lucide-react';
 
-export default function ExportControls({ onExport, studentsCount, isExporting, selectedCount = 0 }) {
+export default function ExportControls({ onExport, onExportRegistration, studentsCount, isExporting, selectedCount = 0 }) {
   const [showOptions, setShowOptions] = useState(false);
   const [options, setOptions] = useState({
     useStrikethrough: true,
@@ -20,6 +20,18 @@ export default function ExportControls({ onExport, studentsCount, isExporting, s
 
   const handleDownloadSingle = () => {
     onExport(options, 'single');
+  };
+
+  const handleDownloadRegSingle = () => {
+    if (onExportRegistration) {
+      onExportRegistration('single');
+    }
+  };
+
+  const handleDownloadRegMulti = () => {
+    if (onExportRegistration) {
+      onExportRegistration('multi');
+    }
   };
 
   if (studentsCount === 0) return null;
@@ -43,7 +55,7 @@ export default function ExportControls({ onExport, studentsCount, isExporting, s
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
-                Export Processed Excel Workbook
+                Export Processed Excel Workbook &amp; Registrations
               </h3>
               {selectedCount > 0 && (
                 <span className="checkpoint-badge" style={{ fontSize: '0.65rem', padding: '0.15rem 0.5rem' }}>
@@ -70,38 +82,77 @@ export default function ExportControls({ onExport, studentsCount, isExporting, s
             <span>Style Settings</span>
           </button>
 
-          {/* Button 1: Download All in Single Sheet */}
+          {/* Button 1: Download Degree Sheets in Single Sheet */}
           <button
             type="button"
             className="btn btn-primary"
             onClick={handleDownloadSingle}
             disabled={isExporting}
-            style={{ padding: '0.65rem 1.25rem', background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
-            title="Combine all students into one single continuous worksheet"
+            style={{ padding: '0.65rem 1.1rem', background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}
+            title="Combine all student degree audit sheets into one continuous worksheet"
           >
             {isExporting ? (
               <Loader2 size={18} className="animate-spin" />
             ) : (
               <Layers size={18} />
             )}
-            <span>Download All in Single Sheet</span>
+            <span>Degree: Single Sheet</span>
           </button>
 
-          {/* Button 2: Download Multi-Sheet (Separate Tab per Student) */}
+          {/* Button 2: Download Degree Multi-Sheet */}
           <button
             type="button"
-            className="btn btn-success"
+            className="btn btn-secondary"
             onClick={handleDownloadMulti}
             disabled={isExporting}
-            style={{ padding: '0.65rem 1.25rem' }}
-            title="Create a separate sheet tab for each student"
+            style={{ padding: '0.65rem 1.1rem' }}
+            title="Create a separate sheet tab for each student's degree audit"
           >
             {isExporting ? (
               <Loader2 size={18} className="animate-spin" />
             ) : (
               <Download size={18} />
             )}
-            <span>Download Multi-Sheet (1 Tab/Student)</span>
+            <span>Degree: Multi-Sheet</span>
+          </button>
+
+          {/* Button 3: Download All Registrations in Same File (Single Sheet) */}
+          <button
+            type="button"
+            className="btn btn-success"
+            onClick={handleDownloadRegSingle}
+            disabled={isExporting}
+            style={{
+              padding: '0.65rem 1.25rem',
+              background: 'linear-gradient(135deg, #10b981, #059669)',
+              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.35)',
+              fontWeight: 600
+            }}
+            title="Export all student official registration forms (reg.xlsx) stacked in the SAME single continuous sheet"
+          >
+            {isExporting ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <ClipboardCheck size={18} />
+            )}
+            <span>Export All Registrations (Same Sheet)</span>
+          </button>
+
+          {/* Button 4: Download Registrations Multi-Tab */}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleDownloadRegMulti}
+            disabled={isExporting}
+            style={{ padding: '0.65rem 1.1rem', borderColor: 'rgba(16, 185, 129, 0.4)' }}
+            title="Export registration forms with a separate tab per student"
+          >
+            {isExporting ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <Layers size={18} />
+            )}
+            <span>Registrations (Multi-Tab)</span>
           </button>
         </div>
       </div>

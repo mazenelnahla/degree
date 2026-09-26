@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { DEGREE_STRUCTURE, ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet } from '../services/courseMapping.js';
-import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, AlertTriangle } from 'lucide-react';
+import { DEGREE_STRUCTURE, ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet, getRegistrationLimit } from '../services/courseMapping.js';
+import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, AlertTriangle, ShieldAlert } from 'lucide-react';
 
 export default function DegreeGrid({
   student,
@@ -23,6 +23,8 @@ export default function DegreeGrid({
   if (!student) return null;
 
   const selectedCodesSet = new Set((student.selectedCourseCodes || []).map(normalizeCode));
+  const regLimit = getRegistrationLimit(student);
+  const isLimitReached = selectedCodesSet.size >= regLimit.maxCourses;
 
   // Filter levels
   const filteredLevels = DEGREE_STRUCTURE.filter(lvl => {
@@ -184,9 +186,31 @@ export default function DegreeGrid({
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Checkpointed: <strong style={{ color: selectedCodesSet.size > 0 ? '#10b981' : 'var(--text-muted)' }}>{selectedCodesSet.size}</strong> course{selectedCodesSet.size === 1 ? '' : 's'}
+              Selected: <strong style={{ color: selectedCodesSet.size >= regLimit.maxCourses ? '#f59e0b' : selectedCodesSet.size > 0 ? '#10b981' : 'var(--text-muted)' }}>
+                {selectedCodesSet.size} / {regLimit.maxCourses}
+              </strong> subjects allowed
+            </span>
+
+            <span style={{
+              fontSize: '0.72rem',
+              padding: '0.15rem 0.55rem',
+              borderRadius: '6px',
+              background: regLimit.tier === 'strict_warning'
+                ? 'rgba(239, 68, 68, 0.15)'
+                : regLimit.tier === 'academic_warning'
+                ? 'rgba(245, 158, 11, 0.15)'
+                : 'rgba(16, 185, 129, 0.15)',
+              color: regLimit.tier === 'strict_warning'
+                ? '#f87171'
+                : regLimit.tier === 'academic_warning'
+                ? '#fbbf24'
+                : '#34d399',
+              border: `1px solid ${regLimit.tier === 'strict_warning' ? 'rgba(239, 68, 68, 0.3)' : regLimit.tier === 'academic_warning' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+              fontWeight: 600
+            }}>
+              Max {regLimit.maxCourses}
             </span>
           </div>
         </div>
@@ -353,12 +377,13 @@ export default function DegreeGrid({
                           // Check whether all prerequisites are met
                           const prereqStatus = checkPrerequisitesMet(course.code, student.courseMap, prerequisiteLinks);
                           const isPrereqBlocked = !isPassed && !isSelected && !prereqStatus.canTake;
+                          const isLimitBlocked = !isPassed && !isSelected && isLimitReached;
 
                           return (
                             <div
                               key={course.code}
                               className={`course-card ${isPassed ? 'passed' : ''} ${isZeroFailed ? 'failed-zero' : ''} ${isSelected ? 'selected-checkpoint' : ''} ${isPrereqBlocked ? 'prereq-blocked' : ''}`}
-                              onClick={() => setActiveCourseModal({ course, statusInfo, requires, unlocks, prereqStatus })}
+                              onClick={() => setActiveCourseModal({ course, statusInfo, requires, unlocks, prereqStatus, isLimitBlocked, regLimit })}
                               onMouseEnter={() => setHoveredCode(norm)}
                               onMouseLeave={() => setHoveredCode(null)}
                               style={{
@@ -366,7 +391,7 @@ export default function DegreeGrid({
                                 outline: isHovered ? '2px solid #6366f1' : isConnected ? '2px dashed #06b6d4' : 'none',
                                 transform: isHovered ? 'translateY(-3px)' : 'none',
                                 transition: 'all 0.2s ease',
-                                opacity: isPrereqBlocked ? 0.72 : 1
+                                opacity: isPrereqBlocked || (isLimitBlocked && !isSelected) ? 0.72 : 1
                               }}
                             >
                               <div>
@@ -385,6 +410,18 @@ export default function DegreeGrid({
                                           style={{ cursor: 'not-allowed', color: '#f59e0b', padding: '2px' }}
                                         >
                                           <Lock size={15} />
+                                        </div>
+                                      ) : isLimitBlocked ? (
+                                        <div
+                                          className="course-checkbox-btn disabled-lock"
+                                          title={`Registration limit reached (${regLimit.maxCourses} subjects). ${regLimit.ruleText}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            alert(`Cannot check ${course.code}: Maximum registration limit reached (${regLimit.maxCourses} subjects). ${regLimit.ruleText}`);
+                                          }}
+                                          style={{ cursor: 'not-allowed', color: 'var(--text-muted)', padding: '2px' }}
+                                        >
+                                          <ShieldAlert size={15} />
                                         </div>
                                       ) : (
                                         <button
@@ -522,7 +559,9 @@ export default function DegreeGrid({
               (() => {
                 const isSelected = selectedCodesSet.has(normalizeCode(activeCourseModal.course.code));
                 const prereqStatus = checkPrerequisitesMet(activeCourseModal.course.code, student.courseMap, prerequisiteLinks);
-                const isBlocked = !isSelected && !prereqStatus.canTake;
+                const isPrereqBlocked = !isSelected && !prereqStatus.canTake;
+                const isLimitBlocked = !isSelected && isLimitReached;
+                const isBlocked = isPrereqBlocked || isLimitBlocked;
 
                 return (
                   <div style={{
@@ -554,18 +593,23 @@ export default function DegreeGrid({
                         alignItems: 'center',
                         gap: '0.4rem'
                       }}>
-                        {isBlocked && <Lock size={15} />}
+                        {isPrereqBlocked && <Lock size={15} />}
+                        {!isPrereqBlocked && isLimitBlocked && <ShieldAlert size={15} />}
                         <span>
                           {isSelected
                             ? '✓ Checkpointed for Excel Sheet'
-                            : isBlocked
+                            : isPrereqBlocked
                             ? 'Cannot Check Course: Prerequisite(s) Missing'
+                            : isLimitBlocked
+                            ? `Cannot Check Course: Limit Reached (${regLimit.maxCourses} Subjects Max)`
                             : 'Select for Registration Checkpoint'}
                         </span>
                       </div>
                       <div style={{ fontSize: '0.78rem', color: isBlocked ? '#fbbf24' : 'var(--text-muted)', marginTop: '0.2rem' }}>
-                        {isBlocked
+                        {isPrereqBlocked
                           ? `You must pass prerequisite course(s) first: ${prereqStatus.missingPrereqs.join(', ')}`
+                          : isLimitBlocked
+                          ? regLimit.ruleText
                           : 'Export into Excel with bold text, green highlight & [✓] checkpoint'}
                       </div>
                     </div>
@@ -587,10 +631,15 @@ export default function DegreeGrid({
                           <CheckSquare size={15} />
                           <span>Selected (Remove)</span>
                         </>
-                      ) : isBlocked ? (
+                      ) : isPrereqBlocked ? (
                         <>
                           <Lock size={15} />
                           <span>Prereqs Not Passed</span>
+                        </>
+                      ) : isLimitBlocked ? (
+                        <>
+                          <ShieldAlert size={15} />
+                          <span>Limit Reached ({regLimit.maxCourses})</span>
                         </>
                       ) : (
                         <>
