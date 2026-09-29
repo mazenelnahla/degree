@@ -6,7 +6,6 @@ export default function UploadZone({
   onTemplateLoaded,
   onRosterLoaded,
   onExportedDegreeLoaded,
-  onLoadSampleDegreeSheet,
   onBackupLoaded,
   hasTemplate,
   templateName,
@@ -257,27 +256,6 @@ export default function UploadZone({
                 }
               }}
             />
-
-            {/* Load 53 Students Degree Sheet Quick Button */}
-            {onLoadSampleDegreeSheet && (
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '0.4rem 0.85rem',
-                  background: 'linear-gradient(135deg, #4f46e5, #06b6d4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem'
-                }}
-                onClick={onLoadSampleDegreeSheet}
-                title="Load public/Degree_Sheets_All_53_Students_Single_Sheet.xlsx with all registered subjects"
-              >
-                <Sparkles size={14} />
-                <span>Load 53 Students Sheet</span>
-              </button>
-            )}
 
             {/* Restore Project Backup Button */}
             {onBackupLoaded && (

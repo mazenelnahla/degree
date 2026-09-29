@@ -115,11 +115,13 @@ function offsetCellRef(ref, offset) {
   return `${m[1]}${parseInt(m[2], 10) + offset}`;
 }
 
+export { offsetCellRef, setCellInlineStr, setCellValue, clearCell };
+
 /**
  * Populate a single reg form worksheet document for a student
  * Accepts an optional rowOffset for single-sheet stacked layouts
  */
-function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks = PREREQUISITE_LINKS, rowOffset = 0) {
+export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks = PREREQUISITE_LINKS, rowOffset = 0) {
   const { targetLevel, termLabel, termSeason, academicYear } = getStudentTargetLevelAndTerm(student);
 
   // Helper map for course code -> ALL_COURSES item

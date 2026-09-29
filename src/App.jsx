@@ -3,6 +3,7 @@ import { parseTranscriptPdf } from './services/pdfParser.js';
 import {
   generatePreservedExcelWorkbook,
   generateSingleSheetCombinedWorkbook,
+  generateCombinedTreeAndRegistrationWorkbook,
   generateRegistrationWorkbook,
   generateSingleSheetRegistrationWorkbook
 } from './services/excelProcessor.js';
@@ -735,6 +736,59 @@ export default function App() {
     }
   };
 
+  // Export Combined Degree Tree & Registration Form on the SAME sheet for each student with page break
+  const handleExportCombinedTreeAndReg = async (options = {}) => {
+    if (!templateBuffer || students.length === 0) {
+      alert('Please upload transcript PDFs and ensure the Excel template is loaded.');
+      return;
+    }
+
+    setIsExporting(true);
+    setStatusMessage('Generating Combined Degree Tree & Registration sheets with page breaks...');
+    try {
+      // Fetch public/reg.xlsx
+      const res = await fetch(`/reg.xlsx?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error('Could not load /reg.xlsx template file. Please verify public/reg.xlsx exists.');
+      }
+      const regTemplateBuffer = await res.arrayBuffer();
+
+      const outputBuffer = await generateCombinedTreeAndRegistrationWorkbook(
+        templateBuffer,
+        regTemplateBuffer,
+        students,
+        {
+          ...options,
+          prerequisiteLinks
+        }
+      );
+
+      const fileName = students.length === 1
+        ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Tree_And_Registration.xlsx`
+        : `Degree_Tree_And_Registration_All_${students.length}_Students.xlsx`;
+
+      const blob = new Blob([outputBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setStatusMessage(`Successfully generated and downloaded combined workbook: ${fileName}`);
+    } catch (err) {
+      console.error('Combined export failed:', err);
+      alert(`Export failed: ${err.message}`);
+      setStatusMessage(`Error: ${err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const activeStudent = students[activeStudentIndex] || students[0];
 
   return (
@@ -817,7 +871,6 @@ export default function App() {
           onTemplateLoaded={handleTemplateLoaded}
           onRosterLoaded={handleRosterLoaded}
           onExportedDegreeLoaded={handleExportedDegreeWorkbookLoaded}
-          onLoadSampleDegreeSheet={handleLoadSampleDegreeSheet}
           onBackupLoaded={handleBackupLoaded}
           hasTemplate={!!templateBuffer}
           templateName={templateName}
@@ -860,6 +913,7 @@ export default function App() {
             <ExportControls
               onExport={handleExport}
               onExportRegistration={handleExportRegistration}
+              onExportCombined={handleExportCombinedTreeAndReg}
               onSaveProjectBackup={handleSaveProjectBackup}
               studentsCount={students.length}
               isExporting={isExporting}

@@ -1,7 +1,8 @@
 import JSZip from 'jszip';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
-import { ALL_COURSES, normalizeCode } from './courseMapping.js';
+import { ALL_COURSES, PREREQUISITE_LINKS, normalizeCode } from './courseMapping.js';
 import { cleanArabicText } from './pdfParser.js';
+import { populateRegistrationSheet } from './regFormGenerator.js';
 
 const SPREADSHEETML_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const PACKAGE_RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -825,6 +826,361 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
 
   zip.file('xl/worksheets/sheet1.xml', serializeXml(sheetDoc));
   zip.file('xl/drawings/drawing1.xml', serializeXml(drawingDoc));
+
+  return await zip.generateAsync({
+    type: 'uint8array',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 }
+  });
+}
+
+/**
+ * OPTION 3: Combined Degree Tree + Registration Form on the SAME Sheet for each student
+ * Top block: Degree Tree audit curriculum (rows 1-52) with all prerequisite lines & checkpoints
+ * Page Break: Inserted after degree tree (row 54) so printing or viewing has Tree on Page 1
+ * Bottom block: Registration Form (rows 56-88) populated with student details and registered courses
+ */
+export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer, regTemplateBuffer, studentTranscripts, options = {}) {
+  const { prerequisiteLinks = PREREQUISITE_LINKS } = options;
+
+  // 1. Load both template zip archives
+  const zip = await JSZip.loadAsync(templateBuffer);
+  const regZip = await JSZip.loadAsync(regTemplateBuffer);
+
+  // 2. Prepare and merge styles.xml (template styles + reg.xlsx styles)
+  const stylesXmlStr = await zip.file('xl/styles.xml').async('text');
+  const stylesDoc = parseXml(stylesXmlStr);
+  const { strikeMap, failedMap, selectedMap } = prepareStyles(stylesDoc, options);
+
+  const regStylesXmlStr = await regZip.file('xl/styles.xml').async('text');
+  const regStylesDoc = parseXml(regStylesXmlStr);
+
+  // Merge fonts from regStylesDoc into stylesDoc
+  const fontsEl = stylesDoc.getElementsByTagName('fonts')[0];
+  const origFontsCount = fontsEl.getElementsByTagName('font').length;
+  const regFontEls = Array.from(regStylesDoc.getElementsByTagName('font'));
+  const fontMap = {};
+  regFontEls.forEach((rf, i) => {
+    const newF = stylesDoc.importNode(rf, true);
+    fontsEl.appendChild(newF);
+    fontMap[i] = origFontsCount + i;
+  });
+  fontsEl.setAttribute('count', String(origFontsCount + regFontEls.length));
+
+  // Merge fills
+  const fillsEl = stylesDoc.getElementsByTagName('fills')[0];
+  const origFillsCount = fillsEl.getElementsByTagName('fill').length;
+  const regFillEls = Array.from(regStylesDoc.getElementsByTagName('fill'));
+  const fillMap = {};
+  regFillEls.forEach((rf, i) => {
+    const newFill = stylesDoc.importNode(rf, true);
+    fillsEl.appendChild(newFill);
+    fillMap[i] = origFillsCount + i;
+  });
+  fillsEl.setAttribute('count', String(origFillsCount + regFillEls.length));
+
+  // Merge borders
+  const bordersEl = stylesDoc.getElementsByTagName('borders')[0];
+  const origBordersCount = bordersEl.getElementsByTagName('border').length;
+  const regBorderEls = Array.from(regStylesDoc.getElementsByTagName('border'));
+  const borderMap = {};
+  regBorderEls.forEach((rb, i) => {
+    const newB = stylesDoc.importNode(rb, true);
+    bordersEl.appendChild(newB);
+    borderMap[i] = origBordersCount + i;
+  });
+  bordersEl.setAttribute('count', String(origBordersCount + regBorderEls.length));
+
+  // Merge cellXfs
+  const cellXfsEl = stylesDoc.getElementsByTagName('cellXfs')[0];
+  const origXfsCount = cellXfsEl.getElementsByTagName('xf').length;
+  const regXfEls = Array.from(regStylesDoc.getElementsByTagName('cellXfs')[0]?.getElementsByTagName('xf') || []);
+  const regXfMap = {};
+  regXfEls.forEach((rXf, i) => {
+    const newXf = stylesDoc.importNode(rXf, true);
+    const fId = parseInt(newXf.getAttribute('fontId') || '0', 10);
+    const fillId = parseInt(newXf.getAttribute('fillId') || '0', 10);
+    const bId = parseInt(newXf.getAttribute('borderId') || '0', 10);
+
+    newXf.setAttribute('fontId', String(fontMap[fId] !== undefined ? fontMap[fId] : fId));
+    newXf.setAttribute('fillId', String(fillMap[fillId] !== undefined ? fillMap[fillId] : fillId));
+    newXf.setAttribute('borderId', String(borderMap[bId] !== undefined ? borderMap[bId] : bId));
+
+    cellXfsEl.appendChild(newXf);
+    regXfMap[i] = origXfsCount + i;
+  });
+  cellXfsEl.setAttribute('count', String(origXfsCount + regXfEls.length));
+  zip.file('xl/styles.xml', serializeXml(stylesDoc));
+
+  // 3. Resolve shared strings from reg.xlsx so reg cells become inline strings
+  const regSharedXmlStr = regZip.file('xl/sharedStrings.xml')
+    ? await regZip.file('xl/sharedStrings.xml').async('text')
+    : null;
+  const regSharedStrings = [];
+  if (regSharedXmlStr) {
+    const regSharedDoc = parseXml(regSharedXmlStr);
+    const siEls = Array.from(regSharedDoc.getElementsByTagName('si'));
+    siEls.forEach(si => {
+      const tEls = Array.from(si.getElementsByTagName('t'));
+      regSharedStrings.push(tEls.map(t => t.textContent || '').join(''));
+    });
+  }
+
+  // 4. Read reg sheet template
+  const regSheetXml = await regZip.file('xl/worksheets/sheet1.xml').async('text');
+  const regSheetDoc = parseXml(regSheetXml);
+  const regRows = Array.from(regSheetDoc.getElementsByTagName('sheetData')[0]?.getElementsByTagName('row') || []);
+  const regMergeCellsEl = regSheetDoc.getElementsByTagName('mergeCells')[0];
+  const regMerges = regMergeCellsEl ? Array.from(regMergeCellsEl.getElementsByTagName('mergeCell')) : [];
+
+  // Read template degree tree sheet & drawing
+  const templateSheetXml = await zip.file('xl/worksheets/sheet1.xml').async('text');
+  const templateDrawingXml = await zip.file('xl/drawings/drawing1.xml').async('text');
+  const templateRelsXml = await zip.file('xl/worksheets/_rels/sheet1.xml.rels').async('text');
+
+  // Workbook structures
+  const workbookXmlStr = await zip.file('xl/workbook.xml').async('text');
+  const workbookDoc = parseXml(workbookXmlStr);
+  const sheetsEl = workbookDoc.getElementsByTagName('sheets')[0];
+  while (sheetsEl.firstChild) sheetsEl.removeChild(sheetsEl.firstChild);
+
+  const wbRelsStr = await zip.file('xl/_rels/workbook.xml.rels').async('text');
+  const wbRelsDoc = parseXml(wbRelsStr);
+  const wbRelationshipsEl = wbRelsDoc.documentElement;
+  Array.from(wbRelationshipsEl.getElementsByTagName('Relationship')).forEach(rel => {
+    const target = rel.getAttribute('Target') || '';
+    if (target.includes('worksheets/sheet')) {
+      wbRelationshipsEl.removeChild(rel);
+    }
+  });
+
+  const contentTypesStr = await zip.file('[Content_Types].xml').async('text');
+  const contentTypesDoc = parseXml(contentTypesStr);
+  const typesEl = contentTypesDoc.documentElement;
+  Array.from(typesEl.getElementsByTagName('Override')).forEach(ov => {
+    const pn = ov.getAttribute('PartName') || '';
+    if (pn.includes('/xl/worksheets/sheet') || pn.includes('/xl/drawings/drawing')) {
+      typesEl.removeChild(ov);
+    }
+  });
+
+  // Stacking offset for Registration Form below the Degree Tree:
+  // Tree is rows 1-52; row 53-54 blank; PageBreak at 54; Registration Form starts at row 56
+  const REG_ROW_OFFSET = 55;
+
+  const existingSheetNames = new Set();
+
+  studentTranscripts.forEach((student, index) => {
+    const sheetNum = index + 1;
+    const sheetName = sanitizeSheetName(student.studentName || `Student ${sheetNum}`, existingSheetNames);
+
+    // Parse fresh copy of template degree tree sheet
+    const sheetDoc = parseXml(templateSheetXml);
+    const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap, selectedCourses } = buildStudentCellMaps(student, 0);
+
+    // 1) Populate Degree Tree (Rows 1-52)
+    const treeCells = Array.from(sheetDoc.getElementsByTagName('c'));
+    for (const c of treeCells) {
+      const r = c.getAttribute('r');
+      if (r === 'F2') {
+        c.setAttribute('t', 'inlineStr');
+        while (c.firstChild) c.removeChild(c.firstChild);
+        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+        tEl.textContent = cleanArabicText(student.studentName);
+        isEl.appendChild(tEl);
+        c.appendChild(isEl);
+      } else if (r === 'D1') {
+        c.setAttribute('t', 'inlineStr');
+        while (c.firstChild) c.removeChild(c.firstChild);
+        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+        tEl.textContent = getAiLevelLabel(student);
+        isEl.appendChild(tEl);
+        c.appendChild(isEl);
+      } else if (r === 'P3' && student.cgpa !== null && student.cgpa !== undefined) {
+        while (c.firstChild) c.removeChild(c.firstChild);
+        const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+        vEl.textContent = student.cgpa.toFixed(2);
+        c.appendChild(vEl);
+      } else if (r === 'W51' && student.cgpa !== null && student.cgpa !== undefined) {
+        while (c.firstChild) c.removeChild(c.firstChild);
+        const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
+        fEl.textContent = '$P3';
+        c.appendChild(fEl);
+        const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+        vEl.textContent = student.cgpa.toFixed(2);
+        c.appendChild(vEl);
+      } else if (gpaValuesMap[r] !== undefined) {
+        while (c.firstChild) c.removeChild(c.firstChild);
+        const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+        vEl.textContent = gpaValuesMap[r];
+        c.appendChild(vEl);
+      } else if (checkpointTextMap[r] !== undefined) {
+        c.setAttribute('t', 'inlineStr');
+        while (c.firstChild) c.removeChild(c.firstChild);
+        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+        tEl.textContent = checkpointTextMap[r];
+        isEl.appendChild(tEl);
+        c.appendChild(isEl);
+      }
+
+      const origS = parseInt(c.getAttribute('s') || '0', 10);
+      if (cellsToCrossWithX.has(r)) {
+        if (strikeMap[origS] !== undefined) c.setAttribute('s', String(strikeMap[origS]));
+      } else if (cellsToSelectGreen.has(r)) {
+        if (selectedMap[origS] !== undefined) c.setAttribute('s', String(selectedMap[origS]));
+      } else if (cellsToFailRed.has(r)) {
+        if (failedMap[origS] !== undefined) c.setAttribute('s', String(failedMap[origS]));
+      }
+    }
+
+    // 2) Append Registration Form rows starting at REG_ROW_OFFSET (e.g. Row 56)
+    const sheetDataEl = sheetDoc.getElementsByTagName('sheetData')[0];
+    regRows.forEach((rRow) => {
+      const origRNum = parseInt(rRow.getAttribute('r'), 10);
+      const newRNum = origRNum + REG_ROW_OFFSET;
+
+      const clonedRow = sheetDoc.createElementNS(SPREADSHEETML_NS, 'row');
+      clonedRow.setAttribute('r', String(newRNum));
+      if (rRow.getAttribute('ht')) clonedRow.setAttribute('ht', rRow.getAttribute('ht'));
+      if (rRow.getAttribute('customHeight')) clonedRow.setAttribute('customHeight', rRow.getAttribute('customHeight'));
+
+      const rCells = Array.from(rRow.getElementsByTagName('c'));
+      rCells.forEach((rc) => {
+        const oldRef = rc.getAttribute('r');
+        const colLetter = oldRef.replace(/[0-9]/g, '');
+        const newRef = `${colLetter}${newRNum}`;
+
+        const newCell = sheetDoc.createElementNS(SPREADSHEETML_NS, 'c');
+        newCell.setAttribute('r', newRef);
+
+        // Map cell style to merged cellXfs
+        const origS = parseInt(rc.getAttribute('s') || '0', 10);
+        const mappedS = regXfMap[origS] !== undefined ? regXfMap[origS] : origS;
+        newCell.setAttribute('s', String(mappedS));
+
+        // Transfer value or convert shared string to inlineStr
+        const tAttr = rc.getAttribute('t');
+        const vEl = rc.getElementsByTagName('v')[0];
+        if (tAttr === 's' && vEl && vEl.textContent !== undefined) {
+          const strIdx = parseInt(vEl.textContent, 10);
+          const strVal = regSharedStrings[strIdx] || '';
+          newCell.setAttribute('t', 'inlineStr');
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = strVal;
+          isEl.appendChild(tEl);
+          newCell.appendChild(isEl);
+        } else if (vEl) {
+          if (tAttr) newCell.setAttribute('t', tAttr);
+          const newV = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          newV.textContent = vEl.textContent;
+          newCell.appendChild(newV);
+        }
+
+        clonedRow.appendChild(newCell);
+      });
+
+      sheetDataEl.appendChild(clonedRow);
+    });
+
+    // 3) Populate student registration data and registered courses into bottom form
+    populateRegistrationSheet(sheetDoc, student, prerequisiteLinks, REG_ROW_OFFSET);
+
+    // 4) Append merge cells for registration form
+    let mergeCellsEl = sheetDoc.getElementsByTagName('mergeCells')[0];
+    if (!mergeCellsEl) {
+      mergeCellsEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'mergeCells');
+      sheetDoc.documentElement.appendChild(mergeCellsEl);
+    }
+    const origTreeMergesCount = mergeCellsEl.getElementsByTagName('mergeCell').length;
+    regMerges.forEach((m) => {
+      const ref = m.getAttribute('ref');
+      const [start, end] = ref.split(':');
+      const newRef = `${offsetCellRef(start, REG_ROW_OFFSET)}:${offsetCellRef(end, REG_ROW_OFFSET)}`;
+      const newM = sheetDoc.createElementNS(SPREADSHEETML_NS, 'mergeCell');
+      newM.setAttribute('ref', newRef);
+      mergeCellsEl.appendChild(newM);
+    });
+    mergeCellsEl.setAttribute('count', String(origTreeMergesCount + regMerges.length));
+
+    // 5) Insert Page Break after Degree Tree (e.g. at row 54, right before registration block)
+    // OpenXML schema sequence: sheetData -> mergeCells -> pageMargins -> rowBreaks -> drawing
+    const rowBreaksEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'rowBreaks');
+    rowBreaksEl.setAttribute('count', '1');
+    rowBreaksEl.setAttribute('manualBreakCount', '1');
+    const brkEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'brk');
+    brkEl.setAttribute('id', String(REG_ROW_OFFSET - 1)); // row 54
+    brkEl.setAttribute('min', '0');
+    brkEl.setAttribute('max', '16383');
+    brkEl.setAttribute('man', '1');
+    rowBreaksEl.appendChild(brkEl);
+
+    let drawingTag = sheetDoc.getElementsByTagName('drawing')[0];
+    if (drawingTag) {
+      sheetDoc.documentElement.insertBefore(rowBreaksEl, drawingTag);
+    } else {
+      drawingTag = sheetDoc.createElementNS(SPREADSHEETML_NS, 'drawing');
+      drawingTag.setAttributeNS(OFFICE_RELS_NS, 'r:id', 'rId1');
+      sheetDoc.documentElement.appendChild(rowBreaksEl);
+      sheetDoc.documentElement.appendChild(drawingTag);
+    }
+
+    // 6) Drawing XML: Prerequisite connector arrows + Checkmarks for tree
+    const studentDrawingDoc = parseXml(templateDrawingXml);
+    const studentWsDrEl = studentDrawingDoc.getElementsByTagName('xdr:wsDr')[0] || studentDrawingDoc.documentElement;
+    if (selectedCourses && selectedCourses.length > 0) {
+      selectedCourses.forEach((sc, scIdx) => {
+        const shapeId = 1000 + scIdx;
+        const checkmarkAnchor = createCheckmarkAnchor(studentDrawingDoc, sc.course, 0, shapeId);
+        studentWsDrEl.appendChild(checkmarkAnchor);
+      });
+    }
+
+    const sheetPath = `xl/worksheets/sheet${sheetNum}.xml`;
+    const relsPath = `xl/worksheets/_rels/sheet${sheetNum}.xml.rels`;
+    const drawingPath = `xl/drawings/drawing${sheetNum}.xml`;
+
+    zip.file(sheetPath, serializeXml(sheetDoc));
+
+    const sheetRelsDoc = parseXml(templateRelsXml);
+    const relEl = sheetRelsDoc.getElementsByTagName('Relationship')[0];
+    if (relEl) {
+      relEl.setAttribute('Target', `../drawings/drawing${sheetNum}.xml`);
+      relEl.setAttribute('Id', 'rId1');
+    }
+    zip.file(relsPath, serializeXml(sheetRelsDoc));
+    zip.file(drawingPath, serializeXml(studentDrawingDoc));
+
+    // Register sheet in workbook.xml
+    const sheetEntry = workbookDoc.createElementNS(SPREADSHEETML_NS, 'sheet');
+    sheetEntry.setAttribute('name', sheetName);
+    sheetEntry.setAttribute('sheetId', String(sheetNum));
+    sheetEntry.setAttributeNS(OFFICE_RELS_NS, 'r:id', `rIdSheet${sheetNum}`);
+    sheetsEl.appendChild(sheetEntry);
+
+    const wbRelEntry = wbRelsDoc.createElementNS(PACKAGE_RELS_NS, 'Relationship');
+    wbRelEntry.setAttribute('Id', `rIdSheet${sheetNum}`);
+    wbRelEntry.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet');
+    wbRelEntry.setAttribute('Target', `worksheets/sheet${sheetNum}.xml`);
+    wbRelationshipsEl.appendChild(wbRelEntry);
+
+    const overrideSheet = contentTypesDoc.createElementNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Override');
+    overrideSheet.setAttribute('PartName', `/xl/worksheets/sheet${sheetNum}.xml`);
+    overrideSheet.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml');
+    typesEl.appendChild(overrideSheet);
+
+    const overrideDrawing = contentTypesDoc.createElementNS('http://schemas.openxmlformats.org/package/2006/content-types', 'Override');
+    overrideDrawing.setAttribute('PartName', `/xl/drawings/drawing${sheetNum}.xml`);
+    overrideDrawing.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.drawing+xml');
+    typesEl.appendChild(overrideDrawing);
+  });
+
+  zip.file('xl/workbook.xml', serializeXml(workbookDoc));
+  zip.file('xl/_rels/workbook.xml.rels', serializeXml(wbRelsDoc));
+  zip.file('[Content_Types].xml', serializeXml(contentTypesDoc));
 
   return await zip.generateAsync({
     type: 'uint8array',
