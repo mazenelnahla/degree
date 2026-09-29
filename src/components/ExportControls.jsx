@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2, CheckSquare, Sparkles, ClipboardCheck } from 'lucide-react';
+import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2, CheckSquare, Sparkles, ClipboardCheck, Save } from 'lucide-react';
 
-export default function ExportControls({ onExport, onExportRegistration, studentsCount, isExporting, selectedCount = 0 }) {
+export default function ExportControls({ onExport, onExportRegistration, onSaveProjectBackup, studentsCount, isExporting, selectedCount = 0 }) {
   const [showOptions, setShowOptions] = useState(false);
   const [options, setOptions] = useState({
     useStrikethrough: true,
@@ -154,6 +154,27 @@ export default function ExportControls({ onExport, onExportRegistration, student
             )}
             <span>Registrations (Multi-Tab)</span>
           </button>
+
+          {/* Button 5: Save Project Backup (.degree.json) */}
+          {onSaveProjectBackup && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onSaveProjectBackup}
+              disabled={isExporting}
+              style={{
+                padding: '0.65rem 1.15rem',
+                borderColor: 'rgba(99, 102, 241, 0.5)',
+                background: 'rgba(99, 102, 241, 0.1)',
+                color: '#818cf8',
+                fontWeight: 600
+              }}
+              title="Save full project state to a .degree.json backup file so you can restore and resume edits anytime"
+            >
+              <Save size={18} />
+              <span>Save Project Backup</span>
+            </button>
+          )}
         </div>
       </div>
 

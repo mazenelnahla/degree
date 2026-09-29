@@ -246,6 +246,7 @@ function buildStudentCellMaps(student, offset = 0) {
   const cellsToSelectGreen = new Set();
   const checkpointTextMap = {};
   const gpaValuesMap = {};
+  const selectedCourses = [];
 
   // Set of normalized course codes that the user has selected/checkpointed
   const selectedSet = new Set((student.selectedCourseCodes || []).map(normalizeCode));
@@ -294,6 +295,7 @@ function buildStudentCellMaps(student, offset = 0) {
       allCourseRefs.forEach(ref => cellsToSelectGreen.add(ref));
       const codeCellRef = offsetCellRef(course.codeCell, offset);
       checkpointTextMap[codeCellRef] = `[✓] ${course.code}`;
+      selectedCourses.push({ course, offset });
     } else if (studentCourse && studentCourse.isPassed && studentCourse.points > 0.00) {
       // Passed courses remain crossed out with diagonal strike
       allCourseRefs.forEach(ref => cellsToCrossWithX.add(ref));
@@ -303,7 +305,156 @@ function buildStudentCellMaps(student, offset = 0) {
     }
   }
 
-  return { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap };
+  return { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap, selectedCourses };
+}
+
+/**
+ * Creates an OOXML DrawingML checkmark shape element that covers the subject cell bounding box.
+ */
+function createCheckmarkAnchor(drawingDoc, course, offset = 0, shapeId = 1000) {
+  const codeMatch = course.codeCell.match(/^([A-Z]+)(\d+)$/);
+  const [mStart, mEnd] = (course.mergeRange || `${course.codeCell}:${course.codeCell}`).split(':');
+  const endMatch = mEnd.match(/^([A-Z]+)(\d+)$/);
+
+  const fromCol = columnLetterToIndex(codeMatch[1]) - 1; // 0-indexed
+  const fromRow = parseInt(codeMatch[2], 10) - 1 + offset; // 0-indexed
+  const toCol = columnLetterToIndex(endMatch[1]); // exclusive boundary
+  const toRow = parseInt(endMatch[2], 10) + offset; // exclusive boundary
+
+  const twoCellAnchor = drawingDoc.createElementNS(DRAWING_NS, 'xdr:twoCellAnchor');
+
+  // <xdr:from>
+  const fromEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:from');
+  const fromColEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:col');
+  fromColEl.textContent = String(fromCol);
+  const fromColOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:colOff');
+  fromColOffEl.textContent = '60000';
+  const fromRowEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:row');
+  fromRowEl.textContent = String(fromRow);
+  const fromRowOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:rowOff');
+  fromRowOffEl.textContent = '40000';
+  fromEl.appendChild(fromColEl);
+  fromEl.appendChild(fromColOffEl);
+  fromEl.appendChild(fromRowEl);
+  fromEl.appendChild(fromRowOffEl);
+  twoCellAnchor.appendChild(fromEl);
+
+  // <xdr:to>
+  const toEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:to');
+  const toColEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:col');
+  toColEl.textContent = String(toCol);
+  const toColOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:colOff');
+  toColOffEl.textContent = '-60000';
+  const toRowEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:row');
+  toRowEl.textContent = String(toRow);
+  const toRowOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:rowOff');
+  toRowOffEl.textContent = '-40000';
+  toEl.appendChild(toColEl);
+  toEl.appendChild(toColOffEl);
+  toEl.appendChild(toRowEl);
+  toEl.appendChild(toRowOffEl);
+  twoCellAnchor.appendChild(toEl);
+
+  // <xdr:sp>
+  const spEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:sp');
+  spEl.setAttribute('macro', '');
+  spEl.setAttribute('textlink', '');
+
+  // nvSpPr
+  const nvSpPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:nvSpPr');
+  const cNvPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:cNvPr');
+  cNvPr.setAttribute('id', String(shapeId));
+  cNvPr.setAttribute('name', `CheckMark_${course.code.replace(/\s+/g, '_')}`);
+  const cNvSpPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:cNvSpPr');
+  nvSpPr.appendChild(cNvPr);
+  nvSpPr.appendChild(cNvSpPr);
+  spEl.appendChild(nvSpPr);
+
+  // spPr
+  const spPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:spPr');
+
+  // custGeom
+  const custGeom = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:custGeom');
+  custGeom.appendChild(drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:avLst'));
+  custGeom.appendChild(drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:gdLst'));
+  custGeom.appendChild(drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:ahLst'));
+  custGeom.appendChild(drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:cxnLst'));
+
+  const rectEl = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:rect');
+  rectEl.setAttribute('l', '0');
+  rectEl.setAttribute('t', '0');
+  rectEl.setAttribute('r', '1000');
+  rectEl.setAttribute('b', '1000');
+  custGeom.appendChild(rectEl);
+
+  const pathLst = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:pathLst');
+  const path = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:path');
+  path.setAttribute('w', '1000');
+  path.setAttribute('h', '1000');
+  path.setAttribute('stroke', '0');
+  path.setAttribute('fill', 'norm');
+
+  // Checkmark vector path
+  const addPt = (type, x, y) => {
+    const el = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', `a:${type}`);
+    const pt = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:pt');
+    pt.setAttribute('x', String(x));
+    pt.setAttribute('y', String(y));
+    el.appendChild(pt);
+    path.appendChild(el);
+  };
+
+  addPt('moveTo', 120, 520);
+  addPt('lnTo', 380, 820);
+  addPt('lnTo', 880, 180);
+  addPt('lnTo', 800, 120);
+  addPt('lnTo', 370, 670);
+  addPt('lnTo', 190, 460);
+  path.appendChild(drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:close'));
+  pathLst.appendChild(path);
+  custGeom.appendChild(pathLst);
+  spPr.appendChild(custGeom);
+
+  // solidFill (emerald green #000000ff)
+  const solidFill = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:solidFill');
+  const srgbClr = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:srgbClr');
+  srgbClr.setAttribute('val', '000000');
+  solidFill.appendChild(srgbClr);
+  spPr.appendChild(solidFill);
+
+  // ln (border: dark green #047857)
+  const ln = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:ln');
+  ln.setAttribute('w', '25400'); // 2pt line width
+  const lnFill = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:solidFill');
+  const lnClr = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:srgbClr');
+  lnClr.setAttribute('val', '047857');
+  lnFill.appendChild(lnClr);
+  ln.appendChild(lnFill);
+  spPr.appendChild(ln);
+
+  // outer shadow effect for clean depth
+  const effectLst = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:effectLst');
+  const outerShdw = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:outerShdw');
+  outerShdw.setAttribute('blurRad', '40000');
+  outerShdw.setAttribute('dist', '20000');
+  outerShdw.setAttribute('dir', '5400000');
+  outerShdw.setAttribute('algn', 'tl');
+  const shdwClr = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:srgbClr');
+  shdwClr.setAttribute('val', '000000');
+  const alpha = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:alpha');
+  alpha.setAttribute('val', '25000');
+  shdwClr.appendChild(alpha);
+  outerShdw.appendChild(shdwClr);
+  effectLst.appendChild(outerShdw);
+  spPr.appendChild(effectLst);
+
+  spEl.appendChild(spPr);
+  twoCellAnchor.appendChild(spEl);
+
+  const clientData = drawingDoc.createElementNS(DRAWING_NS, 'xdr:clientData');
+  twoCellAnchor.appendChild(clientData);
+
+  return twoCellAnchor;
 }
 
 function offsetCellRef(ref, offset) {
@@ -367,7 +518,7 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
     const sheetName = sanitizeSheetName(rawSheetName, existingSheetNames);
 
     const sheetDoc = parseXml(templateSheetXml);
-    const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap } = buildStudentCellMaps(student, 0);
+    const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap, selectedCourses } = buildStudentCellMaps(student, 0);
 
     const allCells = Array.from(sheetDoc.getElementsByTagName('c'));
     for (const c of allCells) {
@@ -449,7 +600,18 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
       relEl.setAttribute('Id', 'rId1');
     }
     zip.file(relsPath, serializeXml(sheetRelsDoc));
-    zip.file(drawingPath, templateDrawingXml);
+
+    // Append Checkmark shapes covering each selected course cell
+    const studentDrawingDoc = parseXml(templateDrawingXml);
+    const studentWsDrEl = studentDrawingDoc.getElementsByTagName('xdr:wsDr')[0] || studentDrawingDoc.documentElement;
+    if (selectedCourses && selectedCourses.length > 0) {
+      selectedCourses.forEach((sc, scIdx) => {
+        const shapeId = 1000 + scIdx;
+        const checkmarkAnchor = createCheckmarkAnchor(studentDrawingDoc, sc.course, 0, shapeId);
+        studentWsDrEl.appendChild(checkmarkAnchor);
+      });
+    }
+    zip.file(drawingPath, serializeXml(studentDrawingDoc));
 
     const sheetEntry = workbookDoc.createElementNS(SPREADSHEETML_NS, 'sheet');
     sheetEntry.setAttribute('name', sheetName);
@@ -525,7 +687,7 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
 
   studentTranscripts.forEach((student, sIdx) => {
     const offset = sIdx * ROW_BLOCK_SIZE;
-    const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap } = buildStudentCellMaps(student, offset);
+    const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap, selectedCourses } = buildStudentCellMaps(student, offset);
 
     // 1. Append Rows for this student
     templateRows.forEach((origRow) => {
@@ -637,6 +799,15 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
       }
       wsDrEl.appendChild(clonedAnchor);
     });
+
+    // 4. Append Checkmark shapes covering each selected course cell for this student
+    if (selectedCourses && selectedCourses.length > 0) {
+      selectedCourses.forEach((sc, scIdx) => {
+        const shapeId = 5000 + (sIdx * 100) + scIdx;
+        const checkmarkAnchor = createCheckmarkAnchor(drawingDoc, sc.course, offset, shapeId);
+        wsDrEl.appendChild(checkmarkAnchor);
+      });
+    }
   });
 
   if (mergeCellsEl) {

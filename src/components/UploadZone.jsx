@@ -1,10 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, FileSpreadsheet, Sparkles, Check, AlertCircle } from 'lucide-react';
+import { Upload, FileText, FileSpreadsheet, Sparkles, Check, AlertCircle, FolderUp } from 'lucide-react';
 
 export default function UploadZone({
   onPdfsLoaded,
   onTemplateLoaded,
   onRosterLoaded,
+  onExportedDegreeLoaded,
+  onLoadSampleDegreeSheet,
+  onBackupLoaded,
   hasTemplate,
   templateName,
   rosterInfo,
@@ -14,6 +17,8 @@ export default function UploadZone({
   const pdfInputRef = useRef(null);
   const templateInputRef = useRef(null);
   const rosterInputRef = useRef(null);
+  const degreeSheetInputRef = useRef(null);
+  const backupInputRef = useRef(null);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -32,6 +37,12 @@ export default function UploadZone({
   };
 
   const handleFiles = (files) => {
+    const jsonFiles = files.filter(f => f.name.toLowerCase().endsWith('.json'));
+    if (jsonFiles.length > 0 && onBackupLoaded) {
+      onBackupLoaded(jsonFiles[0]);
+      return;
+    }
+
     const pdfs = files.filter(f => f.name.toLowerCase().endsWith('.pdf'));
     const xlsxFiles = files.filter(f => f.name.toLowerCase().endsWith('.xlsx') || f.name.toLowerCase().endsWith('.xls'));
 
@@ -39,7 +50,14 @@ export default function UploadZone({
       onPdfsLoaded(pdfs);
     }
     if (xlsxFiles.length > 0) {
-      // If file name implies roster, or if template already loaded, route accordingly
+      // If file name implies exported degree sheet with registered subjects
+      const degreeSheetFile = xlsxFiles.find(f => /degree.*sheet|combined|registered|all.*student/i.test(f.name));
+      if (degreeSheetFile && onExportedDegreeLoaded) {
+        onExportedDegreeLoaded(degreeSheetFile, degreeSheetFile.name);
+        return;
+      }
+
+      // If file name implies roster, route accordingly
       const rosterFile = xlsxFiles.find(f => /name|id|roster|student|أسماء|اسماء|كود|طلاب/i.test(f.name));
       if (rosterFile && onRosterLoaded) {
         onRosterLoaded(rosterFile);
@@ -212,6 +230,80 @@ export default function UploadZone({
                 }
               }}
             />
+
+            {/* Degree Sheet Input */}
+            <input
+              type="file"
+              ref={degreeSheetInputRef}
+              accept=".xlsx,.xls"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                if (e.target.files?.[0] && onExportedDegreeLoaded) {
+                  onExportedDegreeLoaded(e.target.files[0], e.target.files[0].name);
+                }
+              }}
+            />
+
+            {/* Project Backup JSON Input */}
+            <input
+              type="file"
+              ref={backupInputRef}
+              accept=".json,.degree.json"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                if (e.target.files?.[0] && onBackupLoaded) {
+                  onBackupLoaded(e.target.files[0]);
+                  e.target.value = '';
+                }
+              }}
+            />
+
+            {/* Load 53 Students Degree Sheet Quick Button */}
+            {onLoadSampleDegreeSheet && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '0.4rem 0.85rem',
+                  background: 'linear-gradient(135deg, #4f46e5, #06b6d4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.35rem'
+                }}
+                onClick={onLoadSampleDegreeSheet}
+                title="Load public/Degree_Sheets_All_53_Students_Single_Sheet.xlsx with all registered subjects"
+              >
+                <Sparkles size={14} />
+                <span>Load 53 Students Sheet</span>
+              </button>
+            )}
+
+            {/* Restore Project Backup Button */}
+            {onBackupLoaded && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ fontSize: '0.75rem', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem', borderColor: 'rgba(99, 102, 241, 0.4)' }}
+                onClick={() => backupInputRef.current?.click()}
+                title="Restore all students, selected courses, prerequisites and state from a .degree.json backup file"
+              >
+                <FolderUp size={14} style={{ color: '#818cf8' }} />
+                <span>Restore Project (.json)</span>
+              </button>
+            )}
+
+            {/* Upload Any Degree Sheet (.xlsx) Button */}
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.75rem', padding: '0.4rem 0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              onClick={() => degreeSheetInputRef.current?.click()}
+              title="Load an exported Degree Sheet Excel file (.xlsx) with registered subjects"
+            >
+              <FileSpreadsheet size={14} style={{ color: '#06b6d4' }} />
+              <span>Load Degree Excel</span>
+            </button>
 
             {/* Roster Upload Button */}
             <button

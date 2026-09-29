@@ -7,6 +7,8 @@ import {
   generateSingleSheetRegistrationWorkbook
 } from './services/excelProcessor.js';
 import { parseStudentRosterExcel, normalizeStudentId } from './services/rosterParser.js';
+import { parseExportedDegreeWorkbook } from './services/excelDegreeParser.js';
+import { exportProjectBackup, parseProjectBackup } from './services/projectBackup.js';
 import { normalizeCode, ALL_COURSES, loadPrerequisiteLinks, savePrerequisiteLinks, resetPrerequisiteLinks, fetchFilePrerequisiteLinks, downloadPrerequisitesJson, makeDefaultPrerequisiteLinks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason } from './services/courseMapping.js';
 
 import StudentHeader from './components/StudentHeader.jsx';
@@ -15,7 +17,7 @@ import UploadZone from './components/UploadZone.jsx';
 import StudentTabs from './components/StudentTabs.jsx';
 import ExportControls from './components/ExportControls.jsx';
 import PrerequisiteEditorModal from './components/PrerequisiteEditorModal.jsx';
-import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork } from 'lucide-react';
+import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork, Save, FolderUp } from 'lucide-react';
 
 export default function App() {
   const [templateBuffer, setTemplateBuffer] = useState(null);
@@ -201,6 +203,121 @@ export default function App() {
     } catch (err) {
       console.error('Failed to load custom template:', err);
       setStatusMessage(`Error loading template: ${err.message}`);
+    }
+  };
+
+  // Handler for loading an exported degree sheet (.xlsx) with registered subjects
+  const handleExportedDegreeWorkbookLoaded = async (fileOrBuffer, fileName = 'Degree_Sheets.xlsx') => {
+    setIsLoading(true);
+    setStatusMessage(`Restoring students & registered subjects from ${fileName}...`);
+    try {
+      const buffer = fileOrBuffer instanceof ArrayBuffer
+        ? fileOrBuffer
+        : (fileOrBuffer.arrayBuffer ? await fileOrBuffer.arrayBuffer() : fileOrBuffer);
+
+      const parsedStudents = await parseExportedDegreeWorkbook(buffer);
+
+      if (!parsedStudents || parsedStudents.length === 0) {
+        throw new Error('No student degree sheets or courses detected in this Excel file.');
+      }
+
+      // Check against rosterMap if available to update full names / IDs
+      const mappedStudents = parsedStudents.map(s => {
+        let finalName = s.studentName;
+        const normId = normalizeStudentId(s.studentId);
+        if (normId && rosterMap.has(normId)) {
+          finalName = rosterMap.get(normId);
+        }
+        return {
+          ...s,
+          studentName: finalName
+        };
+      });
+
+      setStudents(mappedStudents);
+      setActiveStudentIndex(0);
+      const totalRegistered = mappedStudents.reduce((acc, s) => acc + (s.selectedCourseCodes?.length || 0), 0);
+      setStatusMessage(`Loaded ${mappedStudents.length} student(s) from "${fileName}" with ${totalRegistered} registered course selections restored!`);
+    } catch (err) {
+      console.error('Failed to parse exported degree workbook:', err);
+      alert(`Could not load degree sheet: ${err.message}`);
+      setStatusMessage(`Error loading degree sheet: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Quick helper to load the 53 students single-sheet workbook directly from public folder
+  const handleLoadSampleDegreeSheet = async () => {
+    setIsLoading(true);
+    setStatusMessage('Loading Degree_Sheets_All_53_Students_Single_Sheet.xlsx with registered subjects...');
+    try {
+      const res = await fetch(`/Degree_Sheets_All_53_Students_Single_Sheet.xlsx?t=${Date.now()}`, { cache: 'no-store' });
+      if (!res.ok) {
+        throw new Error('Could not fetch Degree_Sheets_All_53_Students_Single_Sheet.xlsx from public folder.');
+      }
+      const buffer = await res.arrayBuffer();
+      await handleExportedDegreeWorkbookLoaded(buffer, 'Degree_Sheets_All_53_Students_Single_Sheet.xlsx');
+    } catch (err) {
+      console.error('Failed to load Degree_Sheets_All_53_Students_Single_Sheet.xlsx:', err);
+      alert(`Failed to load file: ${err.message}`);
+      setStatusMessage(`Error: ${err.message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler to export entire project backup as a .degree.json file
+  const handleSaveProjectBackup = () => {
+    if (!students || students.length === 0) {
+      alert('No students loaded to backup.');
+      return;
+    }
+    try {
+      const filename = exportProjectBackup({
+        students,
+        prerequisiteLinks,
+        rosterInfo,
+        rosterMap,
+        templateName
+      });
+      setStatusMessage(`Project backup downloaded successfully: ${filename}`);
+    } catch (err) {
+      console.error('Failed to export project backup:', err);
+      alert(`Could not export backup: ${err.message}`);
+    }
+  };
+
+  // Handler to restore full project state from .degree.json file
+  const handleBackupLoaded = async (file) => {
+    setIsLoading(true);
+    setStatusMessage(`Restoring project from backup: ${file.name}...`);
+    try {
+      const restored = await parseProjectBackup(file);
+      if (restored.students && restored.students.length > 0) {
+        setStudents(restored.students);
+        setActiveStudentIndex(0);
+      }
+      if (restored.prerequisiteLinks && Array.isArray(restored.prerequisiteLinks)) {
+        setPrerequisiteLinks(restored.prerequisiteLinks);
+      }
+      if (restored.templateName) {
+        setTemplateName(restored.templateName);
+      }
+      if (restored.rosterInfo) {
+        setRosterInfo(restored.rosterInfo);
+      }
+      if (restored.rosterMap instanceof Map) {
+        setRosterMap(restored.rosterMap);
+      }
+      const totalReg = (restored.students || []).reduce((acc, s) => acc + (s.selectedCourseCodes?.length || 0), 0);
+      setStatusMessage(`Successfully restored project from "${file.name}"! Loaded ${restored.students.length} student(s) with ${totalReg} course selections.`);
+    } catch (err) {
+      console.error('Failed to restore project backup:', err);
+      alert(`Could not restore project backup: ${err.message}`);
+      setStatusMessage(`Error restoring backup: ${err.message}`);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -656,6 +773,19 @@ export default function App() {
 
         {/* Header Right Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          {students.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={handleSaveProjectBackup}
+              title="Save project backup (.degree.json) with all student selections and settings"
+              style={{ fontSize: '0.85rem', padding: '0.5rem 0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', borderColor: 'rgba(99, 102, 241, 0.4)' }}
+            >
+              <Save size={16} style={{ color: '#818cf8' }} />
+              <span>Save Backup</span>
+            </button>
+          )}
+
           <button
             type="button"
             className="btn btn-secondary"
@@ -686,6 +816,9 @@ export default function App() {
           onPdfsLoaded={handlePdfsLoaded}
           onTemplateLoaded={handleTemplateLoaded}
           onRosterLoaded={handleRosterLoaded}
+          onExportedDegreeLoaded={handleExportedDegreeWorkbookLoaded}
+          onLoadSampleDegreeSheet={handleLoadSampleDegreeSheet}
+          onBackupLoaded={handleBackupLoaded}
           hasTemplate={!!templateBuffer}
           templateName={templateName}
           rosterInfo={rosterInfo}
@@ -727,6 +860,7 @@ export default function App() {
             <ExportControls
               onExport={handleExport}
               onExportRegistration={handleExportRegistration}
+              onSaveProjectBackup={handleSaveProjectBackup}
               studentsCount={students.length}
               isExporting={isExporting}
               selectedCount={activeStudent.selectedCourseCodes?.length || 0}
