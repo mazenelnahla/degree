@@ -476,7 +476,7 @@ export function checkPrerequisitesMet(courseCode, studentCourseMap = {}, links =
       }
     }
 
-    const isPassed = record && record.isPassed && record.points > 0.00;
+    const isPassed = record && record.isPassed && (record.points === undefined || record.points > 0.00);
     if (!isPassed) {
       missingPrereqs.push(reqCode);
     }
@@ -588,7 +588,7 @@ export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUIS
     }
 
     // If passed with points > 0, cannot register
-    if (record && record.isPassed && record.points > 0.00) {
+    if (record && record.isPassed && (record.points === undefined || record.points > 0.00)) {
       continue;
     }
 

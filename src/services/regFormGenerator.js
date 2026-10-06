@@ -12,26 +12,52 @@ function parseXml(xmlStr) {
 }
 
 function serializeXml(doc) {
-  return new XMLSerializer().serializeToString(doc);
+  const xmlStr = new XMLSerializer().serializeToString(doc);
+  return xmlStr.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
 }
 
 function sanitizeSheetName(name, existingNames) {
   let clean = cleanArabicText(name || 'Student')
-    .replace(/[\\\/\?\*\[\]\:]/g, ' ')
+    .replace(/[\u0000-\u001F\uFFFE\uFFFF]/g, '')
+    .replace(/[\\\/\?\*\[\]\:\']/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  if (clean.length > 30) {
-    clean = clean.substring(0, 30).trim();
+  if (clean.length > 31) {
+    clean = clean.substring(0, 31).trim();
   }
+  if (!clean) clean = 'Student';
   let finalName = clean;
   let counter = 1;
   while (existingNames.has(finalName.toLowerCase())) {
     const suffix = ` (${counter})`;
-    finalName = clean.substring(0, 30 - suffix.length) + suffix;
+    finalName = clean.substring(0, 31 - suffix.length).trim() + suffix;
     counter++;
   }
   existingNames.add(finalName.toLowerCase());
   return finalName;
+}
+
+async function syncAppXml(zip, sheetNames) {
+  const appXmlStr = zip.file('docProps/app.xml') ? await zip.file('docProps/app.xml').async('text') : null;
+  if (!appXmlStr) return;
+  const appDoc = parseXml(appXmlStr);
+  const hpEl = appDoc.getElementsByTagName('HeadingPairs')[0];
+  const topEl = appDoc.getElementsByTagName('TitlesOfParts')[0];
+  if (hpEl && topEl) {
+    const i4El = hpEl.getElementsByTagName('vt:i4')[0];
+    if (i4El) i4El.textContent = String(sheetNames.length);
+    while (topEl.firstChild) topEl.removeChild(topEl.firstChild);
+    const vecEl = appDoc.createElementNS('http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes', 'vt:vector');
+    vecEl.setAttribute('size', String(sheetNames.length));
+    vecEl.setAttribute('baseType', 'lpstr');
+    sheetNames.forEach(sName => {
+      const lp = appDoc.createElementNS('http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes', 'vt:lpstr');
+      lp.textContent = sName;
+      vecEl.appendChild(lp);
+    });
+    topEl.appendChild(vecEl);
+    zip.file('docProps/app.xml', serializeXml(appDoc));
+  }
 }
 
 function getAiLevelLabel(student) {
@@ -51,7 +77,10 @@ function setCellInlineStr(doc, cellEl, text) {
   while (cellEl.firstChild) cellEl.removeChild(cellEl.firstChild);
   const isEl = doc.createElementNS(SPREADSHEETML_NS, 'is');
   const tEl = doc.createElementNS(SPREADSHEETML_NS, 't');
-  tEl.textContent = text !== undefined && text !== null ? String(text) : '';
+  const cleanText = text !== undefined && text !== null
+    ? String(text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '')
+    : '';
+  tEl.textContent = cleanText;
   isEl.appendChild(tEl);
   cellEl.appendChild(isEl);
 }
@@ -298,7 +327,7 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
 
         // Check if student passed prerequisite
         const prereqRecord = student.courseMap[normalizeCode(reqs[0])];
-        const isPassed = prereqRecord && prereqRecord.isPassed && prereqRecord.points > 0;
+        const isPassed = prereqRecord && prereqRecord.isPassed && (prereqRecord.points === undefined || prereqRecord.points > 0);
         if (eCell) {
           if (isPassed) {
             setCellValue(sheetDoc, eCell, '1', 'b'); // boolean true
@@ -325,7 +354,8 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
     const bCell = getTargetCell(`B${r}`);
     const cCell = getTargetCell(`C${r}`);
     const eCell = getTargetCell(`E${r}`);
-    const fCell = getOrCreateTargetCell(`F${r}`, 34);
+    const existingF = getTargetCell(`F${r}`);
+    const fCell = existingF || getOrCreateTargetCell(`F${r}`, 27);
 
     if (course) {
       if (bCell) setCellValue(sheetDoc, bCell, course.ch);
@@ -339,7 +369,7 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
         if (fCell) setCellInlineStr(sheetDoc, fCell, reqStr);
 
         const prereqRecord = student.courseMap[normalizeCode(reqs[0])];
-        const isPassed = prereqRecord && prereqRecord.isPassed && prereqRecord.points > 0;
+        const isPassed = prereqRecord && prereqRecord.isPassed && (prereqRecord.points === undefined || prereqRecord.points > 0);
         if (eCell) {
           if (isPassed) {
             setCellValue(sheetDoc, eCell, '1', 'b');
@@ -423,12 +453,14 @@ export async function generateRegistrationWorkbook(regTemplateBuffer, students, 
   while (sheetsEl.firstChild) sheetsEl.removeChild(sheetsEl.firstChild);
 
   const existingSheetNames = new Set();
+  const createdSheetNames = [];
 
   // Populate each student as a sheet tab
   students.forEach((student, sIdx) => {
     const sheetNum = sIdx + 1;
     const rawSheetName = student.studentName || student.studentId || `Student ${sheetNum}`;
     const sheetName = sanitizeSheetName(rawSheetName, existingSheetNames);
+    createdSheetNames.push(sheetName);
 
     const sheetDoc = parseXml(templateSheetXml);
     populateRegistrationSheet(sheetDoc, student, prerequisiteLinks, 0);
@@ -464,6 +496,7 @@ export async function generateRegistrationWorkbook(regTemplateBuffer, students, 
   zip.file('xl/workbook.xml', serializeXml(workbookDoc));
   zip.file('xl/_rels/workbook.xml.rels', serializeXml(wbRelsDoc));
   zip.file('[Content_Types].xml', serializeXml(typesDoc));
+  await syncAppXml(zip, createdSheetNames);
 
   return await zip.generateAsync({
     type: 'uint8array',
@@ -484,6 +517,28 @@ export async function generateSingleSheetRegistrationWorkbook(regTemplateBuffer,
   zip.remove('xl/calcChain.xml');
   zip.remove('xl/externalLinks/externalLink1.xml');
   zip.remove('xl/externalLinks/_rels/externalLink1.xml.rels');
+
+  // Clean workbook relationships (remove externalLink and calcChain)
+  const wbRelsStr = await zip.file('xl/_rels/workbook.xml.rels').async('text');
+  const wbRelsDoc = parseXml(wbRelsStr);
+  const relsEl = wbRelsDoc.documentElement;
+  Array.from(relsEl.getElementsByTagName('Relationship')).forEach((rel) => {
+    const type = rel.getAttribute('Type') || '';
+    if (type.includes('externalLink') || type.includes('calcChain')) {
+      relsEl.removeChild(rel);
+    }
+  });
+
+  // Clean [Content_Types].xml (remove externalLink and calcChain)
+  const typesXmlStr = await zip.file('[Content_Types].xml').async('text');
+  const typesDoc = parseXml(typesXmlStr);
+  const typesEl = typesDoc.documentElement;
+  Array.from(typesEl.getElementsByTagName('Override')).forEach((override) => {
+    const partName = override.getAttribute('PartName') || '';
+    if (partName.includes('externalLink') || partName.includes('calcChain')) {
+      typesEl.removeChild(override);
+    }
+  });
 
   const templateSheetXml = await zip.file('xl/worksheets/sheet1.xml').async('text');
   const templateDrawingXml = zip.file('xl/drawings/drawing1.xml')
@@ -604,6 +659,9 @@ export async function generateSingleSheetRegistrationWorkbook(regTemplateBuffer,
     zip.file('xl/drawings/drawing1.xml', serializeXml(drawingDoc));
   }
   zip.file('xl/workbook.xml', serializeXml(workbookDoc));
+  zip.file('xl/_rels/workbook.xml.rels', serializeXml(wbRelsDoc));
+  zip.file('[Content_Types].xml', serializeXml(typesDoc));
+  await syncAppXml(zip, ['All Registration Forms']);
 
   return await zip.generateAsync({
     type: 'uint8array',

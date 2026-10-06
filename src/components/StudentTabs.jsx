@@ -1,8 +1,8 @@
 import React from 'react';
-import { User, CheckCircle2, XCircle } from 'lucide-react';
+import { User, CheckCircle2, XCircle, UserPlus } from 'lucide-react';
 
-export default function StudentTabs({ students, activeIndex, onSelectTab }) {
-  if (!students || students.length <= 1) return null;
+export default function StudentTabs({ students, activeIndex, onSelectTab, onOpenAddStudent }) {
+  if (!students || students.length === 0) return null;
 
   return (
     <div style={{
@@ -80,6 +80,29 @@ export default function StudentTabs({ students, activeIndex, onSelectTab }) {
           </button>
         );
       })}
+
+      {/* Add Student Button in Tabs */}
+      {onOpenAddStudent && (
+        <button
+          type="button"
+          onClick={onOpenAddStudent}
+          className="tab-btn"
+          style={{
+            padding: '0.5rem 0.9rem',
+            whiteSpace: 'nowrap',
+            border: '1px dashed rgba(99, 102, 241, 0.4)',
+            background: 'rgba(99, 102, 241, 0.08)',
+            color: '#818cf8',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.35rem'
+          }}
+          title="Add a new student manually without a transcript"
+        >
+          <UserPlus size={15} />
+          <span>+ Add Student</span>
+        </button>
+      )}
     </div>
   );
 }

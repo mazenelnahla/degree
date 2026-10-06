@@ -34,20 +34,22 @@ export async function parseTranscriptPdf(pdfData, fileName = 'Transcript.pdf') {
 
     for (const item of textContent.items) {
       if (!('str' in item) || !item.str) continue;
+      const cleanStr = item.str.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+      if (!cleanStr) continue;
 
       if (!lastItem) {
-        pageStr += item.str;
+        pageStr += cleanStr;
       } else {
         const sameLine = Math.abs(item.transform[5] - lastItem.transform[5]) <= 3;
         if (!sameLine) {
-          pageStr += '\n' + item.str;
+          pageStr += '\n' + cleanStr;
         } else {
           // Same line: check if horizontal space is actually present between items
           const prevEndsWithSpace = lastItem.str.endsWith(' ');
-          const currStartsWithSpace = item.str.startsWith(' ');
+          const currStartsWithSpace = cleanStr.startsWith(' ');
 
           if (prevEndsWithSpace || currStartsWithSpace) {
-            pageStr += item.str;
+            pageStr += cleanStr;
           } else {
             // Check horizontal gap between items
             const isRtl = item.dir === 'rtl' || lastItem.dir === 'rtl';
@@ -62,10 +64,10 @@ export async function parseTranscriptPdf(pdfData, fileName = 'Transcript.pdf') {
             const spaceThreshold = fontSize * 0.22; // ~2.2px for 10pt font
 
             if (gap > spaceThreshold) {
-              pageStr += ' ' + item.str;
+              pageStr += ' ' + cleanStr;
             } else {
               // Adjacent characters or connected Arabic letters - do not inject false spaces
-              pageStr += item.str;
+              pageStr += cleanStr;
             }
           }
         }
@@ -89,13 +91,16 @@ export async function parseTranscriptPdf(pdfData, fileName = 'Transcript.pdf') {
 export function cleanArabicText(text) {
   if (!text) return '';
 
-  // 1. Unicode Compatibility Decomposition & Composition (fixes Presentation Forms)
-  let s = text.normalize('NFKC');
+  // 1. Remove null bytes and XML 1.0 illegal control characters
+  let s = String(text).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
 
-  // 2. Remove invisible formatting and zero-width characters (ZWNJ, ZWJ, ZWSP, LRM, RLM, BOM)
+  // 2. Unicode Compatibility Decomposition & Composition (fixes Presentation Forms)
+  s = s.normalize('NFKC');
+
+  // 3. Remove invisible formatting and zero-width characters (ZWNJ, ZWJ, ZWSP, LRM, RLM, BOM)
   s = s.replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, '');
 
-  // 3. Fix words where letters were accidentally separated by spaces:
+  // 4. Fix words where letters were accidentally separated by spaces:
   // e.g.: "م ح م د   ع ل ي   أ ح م د" or "ع ب د  ا ل ل ه"
   if (/\s{2,}/.test(s)) {
     const blocks = s.split(/\s{2,}/);
@@ -114,7 +119,7 @@ export function cleanArabicText(text) {
     }
   }
 
-  // 4. Normalize multiple whitespace into single space
+  // 5. Normalize multiple whitespace into single space
   s = s.replace(/\s+/g, ' ').trim();
 
   return s;
@@ -124,14 +129,17 @@ export function cleanArabicText(text) {
  * Parses raw text extracted from the university transcript PDF
  */
 export function parseTranscriptText(text, fileName = '') {
+  // Clean null bytes and invalid control characters from raw text immediately
+  const cleanRawText = (text || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+
   // Extract Student Info (supports both English and Arabic labels)
-  const nameMatch = text.match(/(?:Student\s+Name|اسم\s+الطالب)\s*:\s*([^\n\r]+)/i);
-  const idMatch = text.match(/(?:Student\s+ID|الرقم\s+الجامعي|كود\s+الطالب)\s*:\s*([0-9]+)/i);
-  const cgpaMatch = text.match(/(?:Cumulative\s+GPA|المعدل\s+التراكمي)\s*:\s*([0-9]+(?:\.[0-9]+)?)/i);
-  const admissionMatch = text.match(/(?:Admission\s+year|سنة\s+الالتحاق)\s*:\s*([0-9]{4}-[0-9]{4})/i);
-  const regHoursMatch = text.match(/(?:(?:Total\s+)?Registered\s+Credit\s+Hours|الساعات\s+المسجلة)\s*:\s*([0-9]+)/i);
-  const achHoursMatch = text.match(/(?:(?:Total\s+)?Achieved\s+Credit\s+Hours|الساعات\s+المجتازة)\s*:\s*([0-9]+)/i);
-  const programMatch = text.match(/(?:Program|البرنامج)\s*:\s*([^\n\r]+)/i);
+  const nameMatch = cleanRawText.match(/(?:Student\s+Name|اسم\s+الطالب)\s*:\s*([^\n\r]+)/i);
+  const idMatch = cleanRawText.match(/(?:Student\s+ID|الرقم\s+الجامعي|كود\s+الطالب)\s*:\s*([0-9]+)/i);
+  const cgpaMatch = cleanRawText.match(/(?:Cumulative\s+GPA|المعدل\s+التراكمي)\s*:\s*([0-9]+(?:\.[0-9]+)?)/i);
+  const admissionMatch = cleanRawText.match(/(?:Admission\s+year|سنة\s+الالتحاق)\s*:\s*([0-9]{4}-[0-9]{4})/i);
+  const regHoursMatch = cleanRawText.match(/(?:(?:Total\s+)?Registered\s+Credit\s+Hours|الساعات\s+المسجلة)\s*:\s*([0-9]+)/i);
+  const achHoursMatch = cleanRawText.match(/(?:(?:Total\s+)?Achieved\s+Credit\s+Hours|الساعات\s+المجتازة)\s*:\s*([0-9]+)/i);
+  const programMatch = cleanRawText.match(/(?:Program|البرنامج)\s*:\s*([^\n\r]+)/i);
 
   // Fallback student name from fileName if not found in text
   let studentName = nameMatch ? nameMatch[1].trim() : '';

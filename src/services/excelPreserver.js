@@ -14,17 +14,19 @@ const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/spreadsheet
  */
 function sanitizeSheetName(name, existingNames) {
   let clean = cleanArabicText(name || 'Student')
-    .replace(/[\\\/\?\*\[\]\:]/g, ' ')
+    .replace(/[\u0000-\u001F\uFFFE\uFFFF]/g, '')
+    .replace(/[\\\/\?\*\[\]\:\']/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  if (clean.length > 30) {
-    clean = clean.substring(0, 30).trim();
+  if (clean.length > 31) {
+    clean = clean.substring(0, 31).trim();
   }
+  if (!clean) clean = 'Student';
   let finalName = clean;
   let counter = 1;
   while (existingNames.has(finalName.toLowerCase())) {
     const suffix = ` (${counter})`;
-    finalName = clean.substring(0, 30 - suffix.length) + suffix;
+    finalName = clean.substring(0, 31 - suffix.length).trim() + suffix;
     counter++;
   }
   existingNames.add(finalName.toLowerCase());
@@ -36,7 +38,31 @@ function parseXml(xmlStr) {
 }
 
 function serializeXml(doc) {
-  return new XMLSerializer().serializeToString(doc);
+  const xmlStr = new XMLSerializer().serializeToString(doc);
+  return xmlStr.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+}
+
+async function syncAppXml(zip, sheetNames) {
+  const appXmlStr = zip.file('docProps/app.xml') ? await zip.file('docProps/app.xml').async('text') : null;
+  if (!appXmlStr) return;
+  const appDoc = parseXml(appXmlStr);
+  const hpEl = appDoc.getElementsByTagName('HeadingPairs')[0];
+  const topEl = appDoc.getElementsByTagName('TitlesOfParts')[0];
+  if (hpEl && topEl) {
+    const i4El = hpEl.getElementsByTagName('vt:i4')[0];
+    if (i4El) i4El.textContent = String(sheetNames.length);
+    while (topEl.firstChild) topEl.removeChild(topEl.firstChild);
+    const vecEl = appDoc.createElementNS('http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes', 'vt:vector');
+    vecEl.setAttribute('size', String(sheetNames.length));
+    vecEl.setAttribute('baseType', 'lpstr');
+    sheetNames.forEach(sName => {
+      const lp = appDoc.createElementNS('http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes', 'vt:lpstr');
+      lp.textContent = sName;
+      vecEl.appendChild(lp);
+    });
+    topEl.appendChild(vecEl);
+    zip.file('docProps/app.xml', serializeXml(appDoc));
+  }
 }
 
 function getAiLevelLabel(student) {
@@ -292,12 +318,12 @@ function buildStudentCellMaps(student, offset = 0) {
     const isSelected = selectedSet.has(normCode) || (course.aliases && course.aliases.some(a => selectedSet.has(normalizeCode(a))));
 
     if (isSelected) {
-      // Checked / selected checkpoint subject: render bold in distinct color with checkmark prefix [✓]
+      // Checked / selected checkpoint subject: highlight and overlay black checkmark shape
       allCourseRefs.forEach(ref => cellsToSelectGreen.add(ref));
       const codeCellRef = offsetCellRef(course.codeCell, offset);
-      checkpointTextMap[codeCellRef] = `[✓] ${course.code}`;
+      checkpointTextMap[codeCellRef] = course.code;
       selectedCourses.push({ course, offset });
-    } else if (studentCourse && studentCourse.isPassed && studentCourse.points > 0.00) {
+    } else if (studentCourse && studentCourse.isPassed && (studentCourse.points === undefined || studentCourse.points > 0.00)) {
       // Passed courses remain crossed out with diagonal strike
       allCourseRefs.forEach(ref => cellsToCrossWithX.add(ref));
     } else if (studentCourse && studentCourse.points === 0.00) {
@@ -317,23 +343,24 @@ function createCheckmarkAnchor(drawingDoc, course, offset = 0, shapeId = 1000) {
   const [mStart, mEnd] = (course.mergeRange || `${course.codeCell}:${course.codeCell}`).split(':');
   const endMatch = mEnd.match(/^([A-Z]+)(\d+)$/);
 
-  const fromCol = columnLetterToIndex(codeMatch[1]) - 1; // 0-indexed
-  const fromRow = parseInt(codeMatch[2], 10) - 1 + offset; // 0-indexed
-  const toCol = columnLetterToIndex(endMatch[1]); // exclusive boundary
-  const toRow = parseInt(endMatch[2], 10) + offset; // exclusive boundary
+  const fromCol = columnLetterToIndex(codeMatch[1]) - 1; // 0-indexed column
+  const fromRow = parseInt(codeMatch[2], 10) - 1 + offset; // 0-indexed row
+  const toCol = columnLetterToIndex(endMatch[1]); // exclusive boundary column
+  const toRow = parseInt(endMatch[2], 10) + offset; // exclusive boundary row
 
   const twoCellAnchor = drawingDoc.createElementNS(DRAWING_NS, 'xdr:twoCellAnchor');
+  twoCellAnchor.setAttribute('editAs', 'oneCell');
 
   // <xdr:from>
   const fromEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:from');
   const fromColEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:col');
   fromColEl.textContent = String(fromCol);
   const fromColOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:colOff');
-  fromColOffEl.textContent = '60000';
+  fromColOffEl.textContent = '0';
   const fromRowEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:row');
   fromRowEl.textContent = String(fromRow);
   const fromRowOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:rowOff');
-  fromRowOffEl.textContent = '40000';
+  fromRowOffEl.textContent = '0';
   fromEl.appendChild(fromColEl);
   fromEl.appendChild(fromColOffEl);
   fromEl.appendChild(fromRowEl);
@@ -345,11 +372,11 @@ function createCheckmarkAnchor(drawingDoc, course, offset = 0, shapeId = 1000) {
   const toColEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:col');
   toColEl.textContent = String(toCol);
   const toColOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:colOff');
-  toColOffEl.textContent = '-60000';
+  toColOffEl.textContent = '0';
   const toRowEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:row');
   toRowEl.textContent = String(toRow);
   const toRowOffEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:rowOff');
-  toRowOffEl.textContent = '-40000';
+  toRowOffEl.textContent = '0';
   toEl.appendChild(toColEl);
   toEl.appendChild(toColOffEl);
   toEl.appendChild(toRowEl);
@@ -358,8 +385,6 @@ function createCheckmarkAnchor(drawingDoc, course, offset = 0, shapeId = 1000) {
 
   // <xdr:sp>
   const spEl = drawingDoc.createElementNS(DRAWING_NS, 'xdr:sp');
-  spEl.setAttribute('macro', '');
-  spEl.setAttribute('textlink', '');
 
   // nvSpPr
   const nvSpPr = drawingDoc.createElementNS(DRAWING_NS, 'xdr:nvSpPr');
@@ -405,49 +430,33 @@ function createCheckmarkAnchor(drawingDoc, course, offset = 0, shapeId = 1000) {
     path.appendChild(el);
   };
 
-  addPt('moveTo', 120, 520);
-  addPt('lnTo', 380, 820);
-  addPt('lnTo', 880, 180);
-  addPt('lnTo', 800, 120);
-  addPt('lnTo', 370, 670);
-  addPt('lnTo', 190, 460);
+  addPt('moveTo', 310, 520);
+  addPt('lnTo', 440, 820);
+  addPt('lnTo', 690, 180);
+  addPt('lnTo', 650, 120);
+  addPt('lnTo', 435, 670);
+  addPt('lnTo', 345, 460);
   path.appendChild(drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:close'));
   pathLst.appendChild(path);
   custGeom.appendChild(pathLst);
   spPr.appendChild(custGeom);
 
-  // solidFill (emerald green #000000ff)
+  // solidFill (solid black)
   const solidFill = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:solidFill');
   const srgbClr = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:srgbClr');
   srgbClr.setAttribute('val', '000000');
   solidFill.appendChild(srgbClr);
   spPr.appendChild(solidFill);
 
-  // ln (border: dark green #047857)
+  // ln (black outline)
   const ln = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:ln');
-  ln.setAttribute('w', '25400'); // 2pt line width
+  ln.setAttribute('w', '12700'); // 1pt line width
   const lnFill = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:solidFill');
   const lnClr = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:srgbClr');
-  lnClr.setAttribute('val', '047857');
+  lnClr.setAttribute('val', '000000');
   lnFill.appendChild(lnClr);
   ln.appendChild(lnFill);
   spPr.appendChild(ln);
-
-  // outer shadow effect for clean depth
-  const effectLst = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:effectLst');
-  const outerShdw = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:outerShdw');
-  outerShdw.setAttribute('blurRad', '40000');
-  outerShdw.setAttribute('dist', '20000');
-  outerShdw.setAttribute('dir', '5400000');
-  outerShdw.setAttribute('algn', 'tl');
-  const shdwClr = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:srgbClr');
-  shdwClr.setAttribute('val', '000000');
-  const alpha = drawingDoc.createElementNS('http://schemas.openxmlformats.org/drawingml/2006/main', 'a:alpha');
-  alpha.setAttribute('val', '25000');
-  shdwClr.appendChild(alpha);
-  outerShdw.appendChild(shdwClr);
-  effectLst.appendChild(outerShdw);
-  spPr.appendChild(effectLst);
 
   spEl.appendChild(spPr);
   twoCellAnchor.appendChild(spEl);
@@ -496,27 +505,38 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
   zip.remove('xl/worksheets/sheet1.xml');
   zip.remove('xl/worksheets/_rels/sheet1.xml.rels');
   zip.remove('xl/drawings/drawing1.xml');
+  zip.remove('xl/calcChain.xml');
+  zip.remove('xl/externalLinks/externalLink1.xml');
+  zip.remove('xl/externalLinks/_rels/externalLink1.xml.rels');
+
+  const extRefs = workbookDoc.getElementsByTagName('externalReferences')[0];
+  if (extRefs) extRefs.parentNode.removeChild(extRefs);
+
+  const calcPr = workbookDoc.getElementsByTagName('calcPr')[0];
+  if (calcPr) calcPr.setAttribute('fullCalcOnLoad', '1');
 
   Array.from(wbRelationshipsEl.getElementsByTagName('Relationship')).forEach((relationship) => {
     const type = relationship.getAttribute('Type') || '';
-    if (type.endsWith('/worksheet') || type.endsWith('/drawing')) {
+    if (type.endsWith('/worksheet') || type.endsWith('/drawing') || type.includes('externalLink') || type.includes('calcChain')) {
       wbRelationshipsEl.removeChild(relationship);
     }
   });
 
   Array.from(typesEl.getElementsByTagName('Override')).forEach((override) => {
     const partName = override.getAttribute('PartName') || '';
-    if (partName.startsWith('/xl/worksheets/sheet') || partName.startsWith('/xl/drawings/drawing')) {
+    if (partName.startsWith('/xl/worksheets/sheet') || partName.startsWith('/xl/drawings/drawing') || partName.includes('externalLink') || partName.includes('calcChain')) {
       typesEl.removeChild(override);
     }
   });
 
   const existingSheetNames = new Set();
+  const createdSheetNames = [];
 
   studentTranscripts.forEach((student, sIdx) => {
     const sheetNum = sIdx + 1;
     const rawSheetName = student.studentName || student.studentId || `Student ${sheetNum}`;
     const sheetName = sanitizeSheetName(rawSheetName, existingSheetNames);
+    createdSheetNames.push(sheetName);
 
     const sheetDoc = parseXml(templateSheetXml);
     const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap, selectedCourses } = buildStudentCellMaps(student, 0);
@@ -602,7 +622,7 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
     }
     zip.file(relsPath, serializeXml(sheetRelsDoc));
 
-    // Append Checkmark shapes covering each selected course cell
+    // Preserve clean drawing XML with all 55 prerequisite lines & arrows + Checkmark shapes for tree
     const studentDrawingDoc = parseXml(templateDrawingXml);
     const studentWsDrEl = studentDrawingDoc.getElementsByTagName('xdr:wsDr')[0] || studentDrawingDoc.documentElement;
     if (selectedCourses && selectedCourses.length > 0) {
@@ -640,6 +660,7 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
   zip.file('xl/workbook.xml', serializeXml(workbookDoc));
   zip.file('xl/_rels/workbook.xml.rels', serializeXml(wbRelsDoc));
   zip.file('[Content_Types].xml', serializeXml(contentTypesDoc));
+  await syncAppXml(zip, createdSheetNames);
 
   return await zip.generateAsync({
     type: 'uint8array',
@@ -781,7 +802,7 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
         const [start, end] = ref.split(':');
         const newRef = `${offsetCellRef(start, offset)}:${offsetCellRef(end, offset)}`;
         const newM = sheetDoc.createElementNS(SPREADSHEETML_NS, 'mergeCell');
-        newM.setAttriubte ? newM.setAttriubte('ref', newRef) : newM.setAttribute('ref', newRef);
+        newM.setAttribute('ref', newRef);
         mergeCellsEl.appendChild(newM);
       });
     }
@@ -826,6 +847,7 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
 
   zip.file('xl/worksheets/sheet1.xml', serializeXml(sheetDoc));
   zip.file('xl/drawings/drawing1.xml', serializeXml(drawingDoc));
+  await syncAppXml(zip, ['All Students Combined']);
 
   return await zip.generateAsync({
     type: 'uint8array',
@@ -944,12 +966,24 @@ export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer
   const sheetsEl = workbookDoc.getElementsByTagName('sheets')[0];
   while (sheetsEl.firstChild) sheetsEl.removeChild(sheetsEl.firstChild);
 
+  // Clean calcChain and externalLinks from zip
+  zip.remove('xl/calcChain.xml');
+  zip.remove('xl/externalLinks/externalLink1.xml');
+  zip.remove('xl/externalLinks/_rels/externalLink1.xml.rels');
+
+  const extRefs = workbookDoc.getElementsByTagName('externalReferences')[0];
+  if (extRefs) extRefs.parentNode.removeChild(extRefs);
+
+  const calcPr = workbookDoc.getElementsByTagName('calcPr')[0];
+  if (calcPr) calcPr.setAttribute('fullCalcOnLoad', '1');
+
   const wbRelsStr = await zip.file('xl/_rels/workbook.xml.rels').async('text');
   const wbRelsDoc = parseXml(wbRelsStr);
   const wbRelationshipsEl = wbRelsDoc.documentElement;
   Array.from(wbRelationshipsEl.getElementsByTagName('Relationship')).forEach(rel => {
+    const type = rel.getAttribute('Type') || '';
     const target = rel.getAttribute('Target') || '';
-    if (target.includes('worksheets/sheet')) {
+    if (type.includes('externalLink') || type.includes('calcChain') || target.includes('worksheets/sheet')) {
       wbRelationshipsEl.removeChild(rel);
     }
   });
@@ -959,7 +993,7 @@ export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer
   const typesEl = contentTypesDoc.documentElement;
   Array.from(typesEl.getElementsByTagName('Override')).forEach(ov => {
     const pn = ov.getAttribute('PartName') || '';
-    if (pn.includes('/xl/worksheets/sheet') || pn.includes('/xl/drawings/drawing')) {
+    if (pn.includes('externalLink') || pn.includes('calcChain') || pn.includes('/xl/worksheets/sheet') || pn.includes('/xl/drawings/drawing')) {
       typesEl.removeChild(ov);
     }
   });
@@ -969,10 +1003,12 @@ export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer
   const REG_ROW_OFFSET = 55;
 
   const existingSheetNames = new Set();
+  const createdSheetNames = [];
 
   studentTranscripts.forEach((student, index) => {
     const sheetNum = index + 1;
     const sheetName = sanitizeSheetName(student.studentName || `Student ${sheetNum}`, existingSheetNames);
+    createdSheetNames.push(sheetName);
 
     // Parse fresh copy of template degree tree sheet
     const sheetDoc = parseXml(templateSheetXml);
@@ -1128,7 +1164,7 @@ export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer
       sheetDoc.documentElement.appendChild(drawingTag);
     }
 
-    // 6) Drawing XML: Prerequisite connector arrows + Checkmarks for tree
+    // 6) Drawing XML: Preserve clean template drawing with all connector lines & arrows + Checkmark shapes for tree
     const studentDrawingDoc = parseXml(templateDrawingXml);
     const studentWsDrEl = studentDrawingDoc.getElementsByTagName('xdr:wsDr')[0] || studentDrawingDoc.documentElement;
     if (selectedCourses && selectedCourses.length > 0) {
@@ -1181,6 +1217,7 @@ export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer
   zip.file('xl/workbook.xml', serializeXml(workbookDoc));
   zip.file('xl/_rels/workbook.xml.rels', serializeXml(wbRelsDoc));
   zip.file('[Content_Types].xml', serializeXml(contentTypesDoc));
+  await syncAppXml(zip, createdSheetNames);
 
   return await zip.generateAsync({
     type: 'uint8array',

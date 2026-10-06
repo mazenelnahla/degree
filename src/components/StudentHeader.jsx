@@ -1,8 +1,8 @@
 import React from 'react';
-import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert, Calendar } from 'lucide-react';
+import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert, Calendar, Trash2 } from 'lucide-react';
 import { getRegistrationLimit, getStudentRegistrationSeason } from '../services/courseMapping.js';
 
-export default function StudentHeader({ student }) {
+export default function StudentHeader({ student, onDeleteStudent, onOpenCrossModal }) {
   if (!student) return null;
 
   const activeSeason = getStudentRegistrationSeason(student);
@@ -49,6 +49,48 @@ export default function StudentHeader({ student }) {
                 <span className="code-pill">
                   ID: {student.studentId}
                 </span>
+              )}
+              {onOpenCrossModal && (
+                <button
+                  type="button"
+                  onClick={onOpenCrossModal}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '0.25rem 0.65rem',
+                    fontSize: '0.75rem',
+                    color: '#10b981',
+                    borderColor: 'rgba(16, 185, 129, 0.35)',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}
+                  title="Open modal to cross or uncross subjects for this student"
+                >
+                  <CheckSquare size={13} />
+                  <span>Cross Subjects ({student.passedCount || 0})</span>
+                </button>
+              )}
+              {onDeleteStudent && (
+                <button
+                  type="button"
+                  onClick={onDeleteStudent}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '0.25rem 0.55rem',
+                    fontSize: '0.75rem',
+                    color: '#f87171',
+                    borderColor: 'rgba(239, 68, 68, 0.35)',
+                    background: 'rgba(239, 68, 68, 0.08)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.3rem'
+                  }}
+                  title={`Remove student ${student.studentName}`}
+                >
+                  <Trash2 size={13} />
+                  <span>Remove</span>
+                </button>
               )}
             </div>
 

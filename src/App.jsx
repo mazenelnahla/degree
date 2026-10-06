@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { parseTranscriptPdf } from './services/pdfParser.js';
+import { parseTranscriptPdf, cleanArabicText } from './services/pdfParser.js';
 import {
   generatePreservedExcelWorkbook,
   generateSingleSheetCombinedWorkbook,
@@ -18,7 +18,9 @@ import UploadZone from './components/UploadZone.jsx';
 import StudentTabs from './components/StudentTabs.jsx';
 import ExportControls from './components/ExportControls.jsx';
 import PrerequisiteEditorModal from './components/PrerequisiteEditorModal.jsx';
-import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork, Save, FolderUp } from 'lucide-react';
+import AddStudentModal from './components/AddStudentModal.jsx';
+import CrossSubjectsModal from './components/CrossSubjectsModal.jsx';
+import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork, Save, FolderUp, UserPlus, CheckSquare } from 'lucide-react';
 
 export default function App() {
   const [templateBuffer, setTemplateBuffer] = useState(null);
@@ -31,6 +33,10 @@ export default function App() {
   const [statusMessage, setStatusMessage] = useState('');
   const [rosterMap, setRosterMap] = useState(new Map());
   const [rosterInfo, setRosterInfo] = useState(null);
+
+  // Manual Add Student & Cross Subjects modal states
+  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
+  const [isCrossSubjectsModalOpen, setIsCrossSubjectsModalOpen] = useState(false);
   
   // Prerequisite links state (persisted in localStorage + public/prerequisites.json local file)
   const [prerequisiteLinks, setPrerequisiteLinks] = useState(() => loadPrerequisiteLinks());
@@ -320,6 +326,216 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Add a new student manually (with Name, ID, optional level, CGPA, and crossed subjects)
+  const handleAddStudent = (manualData) => {
+    const {
+      studentName,
+      studentId,
+      aiLevel = 1,
+      cgpa = 3.0,
+      admissionYear = '2024',
+      crossedCourseCodes = []
+    } = manualData;
+
+    let finalName = studentName;
+    const normId = normalizeStudentId(studentId);
+    if (normId && rosterMap.has(normId)) {
+      finalName = rosterMap.get(normId);
+    }
+
+    const courseMap = {};
+    const crossedSet = new Set(crossedCourseCodes.map(normalizeCode));
+
+    ALL_COURSES.forEach(course => {
+      const norm = normalizeCode(course.code);
+      const isCrossed = crossedSet.has(norm) || (course.aliases && course.aliases.some(a => crossedSet.has(normalizeCode(a))));
+      if (isCrossed) {
+        courseMap[norm] = {
+          code: course.code,
+          normCode: norm,
+          name: course.name,
+          credit: course.ch || 3,
+          points: 3.0,
+          grade: 'P',
+          isPassed: true
+        };
+      }
+    });
+
+    const passedCount = Object.keys(courseMap).length;
+    const achievedHours = ALL_COURSES
+      .filter(c => courseMap[normalizeCode(c.code)]?.isPassed)
+      .reduce((sum, c) => sum + (c.ch || 3), 0);
+
+    const newStudent = {
+      studentName: finalName,
+      studentId: studentId,
+      cgpa: cgpa !== null && cgpa !== undefined && !isNaN(cgpa) ? parseFloat(cgpa) : 3.0,
+      admissionYear: admissionYear || '2024',
+      registeredHours: 0,
+      achievedHours: achievedHours || (passedCount * 3),
+      program: 'Artificial Intelligence',
+      rawCourses: [],
+      courseMap,
+      passedCount,
+      failedCount: 0,
+      totalAttempted: passedCount,
+      allSemesterTables: [],
+      tableCount: aiLevel,
+      aiLevel,
+      regularSemesters: [],
+      summerSemesters: [],
+      levelGpas: [],
+      latestSemesterGpa: null,
+      selectedCourseCodes: []
+    };
+
+    setStudents(prev => {
+      const combined = [...prev];
+      const existingIdx = combined.findIndex(s => s.studentId && normalizeStudentId(s.studentId) === normId);
+      if (existingIdx >= 0) {
+        const existing = combined[existingIdx];
+        const mergedCourseMap = { ...existing.courseMap, ...courseMap };
+        const updatedPassed = Object.values(mergedCourseMap).filter(c => c.isPassed && (c.points === undefined || c.points > 0)).length;
+        const updatedAchieved = Object.values(mergedCourseMap).filter(c => c.isPassed && (c.points === undefined || c.points > 0)).reduce((sum, c) => sum + (c.credit || 3), 0);
+        combined[existingIdx] = {
+          ...existing,
+          ...newStudent,
+          courseMap: mergedCourseMap,
+          passedCount: updatedPassed,
+          achievedHours: updatedAchieved,
+          selectedCourseCodes: existing.selectedCourseCodes || []
+        };
+        setActiveStudentIndex(existingIdx);
+      } else {
+        combined.push(newStudent);
+        setActiveStudentIndex(combined.length - 1);
+      }
+      return combined;
+    });
+
+    setStatusMessage(`Successfully added student "${finalName}" (${studentId}) with ${passedCount} passed/crossed course(s).`);
+  };
+
+  // Toggle crossed / passed status for a single course on the active student
+  const handleToggleCourseCrossed = (courseCode) => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent) return;
+
+    const norm = normalizeCode(courseCode);
+    const courseMeta = ALL_COURSES.find(c => normalizeCode(c.code) === norm);
+    const currentRecord = activeStudent.courseMap[norm];
+    const isCurrentlyPassed = currentRecord && currentRecord.isPassed && (currentRecord.points === undefined || currentRecord.points > 0);
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+
+        const updatedCourseMap = { ...s.courseMap };
+        if (isCurrentlyPassed) {
+          delete updatedCourseMap[norm];
+        } else {
+          updatedCourseMap[norm] = {
+            code: courseMeta ? courseMeta.code : courseCode,
+            normCode: norm,
+            name: courseMeta ? courseMeta.name : courseCode,
+            credit: courseMeta ? (courseMeta.ch || 3) : 3,
+            points: 3.0,
+            grade: 'P',
+            isPassed: true
+          };
+        }
+
+        const passedCourses = Object.values(updatedCourseMap).filter(c => c.isPassed && (c.points === undefined || c.points > 0));
+        const passedCount = passedCourses.length;
+        const achievedHours = passedCourses.reduce((sum, c) => sum + (c.credit || 3), 0);
+
+        // If newly crossed course was in selectedCourseCodes (checkpointed), unselect it
+        const selectedCourseCodes = (s.selectedCourseCodes || []).filter(c => normalizeCode(c) !== norm);
+
+        return {
+          ...s,
+          courseMap: updatedCourseMap,
+          passedCount,
+          achievedHours,
+          selectedCourseCodes
+        };
+      });
+    });
+
+    setStatusMessage(`${isCurrentlyPassed ? 'Uncrossed' : 'Crossed'} ${courseCode}.`);
+  };
+
+  // Bulk cross or uncross courses for the active student
+  const handleBulkCrossCourses = (courseCodes, shouldCross = true) => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent || !courseCodes || courseCodes.length === 0) return;
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+
+        const updatedCourseMap = { ...s.courseMap };
+        const crossedNorms = new Set();
+
+        courseCodes.forEach(code => {
+          const norm = normalizeCode(code);
+          crossedNorms.add(norm);
+          const courseMeta = ALL_COURSES.find(c => normalizeCode(c.code) === norm);
+
+          if (shouldCross) {
+            updatedCourseMap[norm] = {
+              code: courseMeta ? courseMeta.code : code,
+              normCode: norm,
+              name: courseMeta ? courseMeta.name : code,
+              credit: courseMeta ? (courseMeta.ch || 3) : 3,
+              points: 3.0,
+              grade: 'P',
+              isPassed: true
+            };
+          } else {
+            delete updatedCourseMap[norm];
+          }
+        });
+
+        const passedCourses = Object.values(updatedCourseMap).filter(c => c.isPassed && (c.points === undefined || c.points > 0));
+        const passedCount = passedCourses.length;
+        const achievedHours = passedCourses.reduce((sum, c) => sum + (c.credit || 3), 0);
+
+        let selectedCourseCodes = s.selectedCourseCodes || [];
+        if (shouldCross) {
+          selectedCourseCodes = selectedCourseCodes.filter(c => !crossedNorms.has(normalizeCode(c)));
+        }
+
+        return {
+          ...s,
+          courseMap: updatedCourseMap,
+          passedCount,
+          achievedHours,
+          selectedCourseCodes
+        };
+      });
+    });
+
+    setStatusMessage(`${shouldCross ? 'Crossed' : 'Uncrossed'} ${courseCodes.length} subject(s).`);
+  };
+
+  // Delete student
+  const handleDeleteStudent = (indexToDelete) => {
+    if (students.length === 0 || indexToDelete < 0 || indexToDelete >= students.length) return;
+    const name = students[indexToDelete]?.studentName || `Student ${indexToDelete + 1}`;
+    if (!window.confirm(`Are you sure you want to remove "${name}"?`)) return;
+
+    setStudents(prev => prev.filter((_, idx) => idx !== indexToDelete));
+    setActiveStudentIndex(prev => {
+      if (prev >= indexToDelete) {
+        return Math.max(0, prev - 1);
+      }
+      return prev;
+    });
+    setStatusMessage(`Removed student "${name}".`);
   };
 
   // Toggle selection for a single course for the active student (blocks if prerequisites not passed, GPA limit exceeded, or season mismatch)
@@ -642,6 +858,11 @@ export default function App() {
     }
 
     setIsExporting(true);
+    const getSafeSingleStudentName = () => {
+      const raw = cleanArabicText(students[0]?.studentName || students[0]?.studentId || 'Student');
+      return raw.replace(/[\/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim();
+    };
+
     try {
       let outputBuffer;
       let fileName;
@@ -649,12 +870,12 @@ export default function App() {
       if (mode === 'single') {
         outputBuffer = await generateSingleSheetCombinedWorkbook(templateBuffer, students, options);
         fileName = students.length === 1
-          ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Single_Sheet.xlsx`
+          ? `${getSafeSingleStudentName()}_Single_Sheet.xlsx`
           : `Degree_Sheets_All_${students.length}_Students_Single_Sheet.xlsx`;
       } else {
         outputBuffer = await generatePreservedExcelWorkbook(templateBuffer, students, options);
         fileName = students.length === 1
-          ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Crossed_Degree.xlsx`
+          ? `${getSafeSingleStudentName()}_Crossed_Degree.xlsx`
           : `Degree_Sheets_All_${students.length}_Students_Multi_Tab.xlsx`;
       }
       
@@ -699,19 +920,24 @@ export default function App() {
       let outputBuffer;
       let fileName;
 
+      const getSafeSingleStudentName = () => {
+        const raw = cleanArabicText(students[0]?.studentName || students[0]?.studentId || 'Student');
+        return raw.replace(/[\/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim();
+      };
+
       if (mode === 'single') {
         outputBuffer = await generateSingleSheetRegistrationWorkbook(regTemplateBuffer, students, {
           prerequisiteLinks
         });
         fileName = students.length === 1
-          ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Registration_Form_Single_Sheet.xlsx`
+          ? `${getSafeSingleStudentName()}_Registration_Form_Single_Sheet.xlsx`
           : `Registration_Forms_All_${students.length}_Students_Single_Sheet.xlsx`;
       } else {
         outputBuffer = await generateRegistrationWorkbook(regTemplateBuffer, students, {
           prerequisiteLinks
         });
         fileName = students.length === 1
-          ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Registration_Form.xlsx`
+          ? `${getSafeSingleStudentName()}_Registration_Form.xlsx`
           : `Registration_Forms_All_${students.length}_Students_Multi_Tab.xlsx`;
       }
 
@@ -763,8 +989,13 @@ export default function App() {
         }
       );
 
+      const getSafeSingleStudentName = () => {
+        const raw = cleanArabicText(students[0]?.studentName || students[0]?.studentId || 'Student');
+        return raw.replace(/[\/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim();
+      };
+
       const fileName = students.length === 1
-        ? `${students[0].studentName.replace(/[^a-zA-Z0-9_-]/g, '_')}_Tree_And_Registration.xlsx`
+        ? `${getSafeSingleStudentName()}_Tree_And_Registration.xlsx`
         : `Degree_Tree_And_Registration_All_${students.length}_Students.xlsx`;
 
       const blob = new Blob([outputBuffer], {
@@ -827,6 +1058,24 @@ export default function App() {
 
         {/* Header Right Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setIsAddStudentModalOpen(true)}
+            title="Add student manually (Name & ID) and cross passed subjects without transcript"
+            style={{
+              fontSize: '0.85rem',
+              padding: '0.5rem 0.95rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              background: 'linear-gradient(135deg, #6366f1, #06b6d4)'
+            }}
+          >
+            <UserPlus size={16} />
+            <span>+ Add Student</span>
+          </button>
+
           {students.length > 0 && (
             <button
               type="button"
@@ -872,6 +1121,7 @@ export default function App() {
           onRosterLoaded={handleRosterLoaded}
           onExportedDegreeLoaded={handleExportedDegreeWorkbookLoaded}
           onBackupLoaded={handleBackupLoaded}
+          onOpenAddStudent={() => setIsAddStudentModalOpen(true)}
           hasTemplate={!!templateBuffer}
           templateName={templateName}
           rosterInfo={rosterInfo}
@@ -902,12 +1152,17 @@ export default function App() {
           students={students}
           activeIndex={activeStudentIndex}
           onSelectTab={(idx) => setActiveStudentIndex(idx)}
+          onOpenAddStudent={() => setIsAddStudentModalOpen(true)}
         />
 
         {/* Active Student Header Details */}
         {activeStudent && (
           <>
-            <StudentHeader student={activeStudent} />
+            <StudentHeader
+              student={activeStudent}
+              onDeleteStudent={() => handleDeleteStudent(activeStudentIndex)}
+              onOpenCrossModal={() => setIsCrossSubjectsModalOpen(true)}
+            />
 
             {/* Export Controls Bar */}
             <ExportControls
@@ -928,6 +1183,8 @@ export default function App() {
               onSavePrerequisites={handleSavePrerequisites}
               onResetPrerequisites={handleResetPrerequisites}
               onToggleCourseSelection={handleToggleCourseSelection}
+              onToggleCourseCrossed={handleToggleCourseCrossed}
+              onBulkCrossCourses={handleBulkCrossCourses}
               onSelectAllFailed={handleSelectAllFailed}
               onSelectAllPending={handleSelectAllPending}
               onClearSelected={handleClearSelected}
@@ -956,8 +1213,26 @@ export default function App() {
               No Transcripts Uploaded Yet
             </h3>
             <p style={{ color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto', fontSize: '0.9rem', lineHeight: 1.6 }}>
-              Upload one or more student transcript PDF files using the dropzone above to cross out passed subjects, alert on 0.00 failed courses, and export the processed Excel degree sheet.
+              Upload one or more student transcript PDF files using the dropzone above, or click <strong>"+ Add Student"</strong> to create a student profile and cross completed subjects manually.
             </p>
+            <div style={{ marginTop: '1.25rem' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setIsAddStudentModalOpen(true)}
+                style={{
+                  fontSize: '0.9rem',
+                  padding: '0.6rem 1.4rem',
+                  background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <UserPlus size={18} />
+                <span>+ Add Student Manually</span>
+              </button>
+            </div>
           </div>
         )}
       </main>
@@ -983,6 +1258,22 @@ export default function App() {
         onSavePrerequisites={handleSavePrerequisites}
         onMakeDefault={handleMakeDefaultPrerequisites}
         onResetPrerequisites={handleResetPrerequisites}
+      />
+
+      {/* Add Student Modal */}
+      <AddStudentModal
+        isOpen={isAddStudentModalOpen}
+        onClose={() => setIsAddStudentModalOpen(false)}
+        onAddStudent={handleAddStudent}
+      />
+
+      {/* Cross Subjects Modal (Direct Access from Student Header) */}
+      <CrossSubjectsModal
+        isOpen={isCrossSubjectsModalOpen}
+        onClose={() => setIsCrossSubjectsModalOpen(false)}
+        student={activeStudent}
+        onToggleCourseCrossed={handleToggleCourseCrossed}
+        onBulkCrossCourses={handleBulkCrossCourses}
       />
     </div>
   );

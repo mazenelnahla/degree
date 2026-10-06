@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, FileSpreadsheet, Sparkles, Check, AlertCircle, FolderUp } from 'lucide-react';
+import { Upload, FileText, FileSpreadsheet, Sparkles, Check, AlertCircle, FolderUp, UserPlus } from 'lucide-react';
 
 export default function UploadZone({
   onPdfsLoaded,
@@ -7,6 +7,7 @@ export default function UploadZone({
   onRosterLoaded,
   onExportedDegreeLoaded,
   onBackupLoaded,
+  onOpenAddStudent,
   hasTemplate,
   templateName,
   rosterInfo,
@@ -112,18 +113,43 @@ export default function UploadZone({
             Drag &amp; drop single or batch student PDF transcripts here. Supports multi-file selection.
           </p>
 
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ margin: '0 auto', fontSize: '0.85rem', padding: '0.5rem 1.25rem' }}
-            onClick={(e) => {
-              e.stopPropagation();
-              pdfInputRef.current?.click();
-            }}
-          >
-            <FileText size={16} />
-            <span>Browse PDF Files</span>
-          </button>
+          <div style={{ display: 'flex', gap: '0.6rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.85rem', padding: '0.5rem 1.25rem' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                pdfInputRef.current?.click();
+              }}
+            >
+              <FileText size={16} />
+              <span>Browse PDF Files</span>
+            </button>
+
+            {onOpenAddStudent && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{
+                  fontSize: '0.85rem',
+                  padding: '0.5rem 1.25rem',
+                  background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.4rem'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenAddStudent();
+                }}
+                title="Add student manually (Name & ID) and cross subjects without a transcript"
+              >
+                <UserPlus size={16} />
+                <span>+ Add Student Manually</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Excel Template & Student ID-Name Roster Panel */}

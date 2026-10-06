@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { DEGREE_STRUCTURE, ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason, isAllSeasonCourse } from '../services/courseMapping.js';
 import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, AlertTriangle, ShieldAlert, Calendar } from 'lucide-react';
+import CrossSubjectsModal from './CrossSubjectsModal.jsx';
 
 export default function DegreeGrid({
   student,
@@ -9,6 +10,8 @@ export default function DegreeGrid({
   onSavePrerequisites,
   onResetPrerequisites,
   onToggleCourseSelection,
+  onToggleCourseCrossed,
+  onBulkCrossCourses,
   onSelectAllFailed,
   onSelectAllPending,
   onClearSelected,
@@ -21,6 +24,7 @@ export default function DegreeGrid({
   const [activeCourseModal, setActiveCourseModal] = useState(null);
   const [hoveredCode, setHoveredCode] = useState(null);
   const [inlinePrereqToAdd, setInlinePrereqToAdd] = useState('');
+  const [isCrossModalOpen, setIsCrossModalOpen] = useState(false);
 
   if (!student) return null;
 
@@ -54,7 +58,7 @@ export default function DegreeGrid({
     if (!record) {
       return { status: 'not_taken', label: 'Not Taken', record: null, isSelected };
     }
-    if (record.isPassed && record.points > 0.00) {
+    if (record.isPassed && (record.points === undefined || record.points > 0.00)) {
       return { status: 'passed', label: 'Passed & Crossed', record, isSelected: false };
     }
     if (record.points === 0.00) {
@@ -187,6 +191,27 @@ export default function DegreeGrid({
                 Clear Selections ({student.selectedCourseCodes.length})
               </button>
             )}
+
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setIsCrossModalOpen(true)}
+              style={{
+                fontSize: '0.78rem',
+                padding: '0.3rem 0.8rem',
+                borderRadius: '8px',
+                background: 'rgba(16, 185, 129, 0.12)',
+                borderColor: 'rgba(16, 185, 129, 0.35)',
+                color: '#34d399',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem'
+              }}
+              title="Manage and cross/uncross passed subjects for this student"
+            >
+              <CheckCircle2 size={14} />
+              <span>Cross / Passed Subjects ({student.passedCount || 0})</span>
+            </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
@@ -475,6 +500,46 @@ export default function DegreeGrid({
                                       <span>Clear</span>
                                     </button>
                                   )}
+
+                                  {/* Quick Cross Semester Action */}
+                                  {(() => {
+                                    const semCrossedCount = sem.courses.filter(c => {
+                                      const r = student.courseMap && student.courseMap[normalizeCode(c.code)];
+                                      return r && r.isPassed && (r.points === undefined || r.points > 0);
+                                    }).length;
+                                    const allCrossed = semCrossedCount === sem.courses.length;
+
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const codes = sem.courses.map(c => c.code);
+                                          onBulkCrossCourses && onBulkCrossCourses(codes, !allCrossed);
+                                        }}
+                                        title={allCrossed ? `Uncross all subjects in ${sem.title}` : `Cross all subjects in ${sem.title} (Mark passed)`}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.25rem',
+                                          padding: '0.22rem 0.55rem',
+                                          borderRadius: '6px',
+                                          fontSize: '0.72rem',
+                                          fontWeight: 600,
+                                          background: allCrossed ? 'rgba(16, 185, 129, 0.18)' : 'rgba(255, 255, 255, 0.04)',
+                                          border: allCrossed ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-color)',
+                                          color: allCrossed ? '#34d399' : 'var(--text-muted)',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.15s ease'
+                                        }}
+                                      >
+                                        <Check size={12} />
+                                        <span>{allCrossed ? 'Sem Crossed ✓' : 'Cross Sem'}</span>
+                                        {semCrossedCount > 0 && !allCrossed && (
+                                          <span style={{ fontSize: '0.65rem', opacity: 0.8 }}>({semCrossedCount})</span>
+                                        )}
+                                      </button>
+                                    );
+                                  })()}
                                 </>
                               );
                             })()}
@@ -643,46 +708,76 @@ export default function DegreeGrid({
                                 )}
                               </div>
 
-                              {/* Status Badge */}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.4rem', borderTop: '1px solid var(--border-color)', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                {isPassed && (
-                                  <div style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '0.3rem',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    color: 'var(--passed-text)'
-                                  }}>
-                                    <CheckCircle2 size={14} />
-                                    <span>{statusInfo.record.points.toFixed(2)} ({statusInfo.record.grade})</span>
+                                {/* Status Badge & Actions */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.5rem', paddingTop: '0.4rem', borderTop: '1px solid var(--border-color)', gap: '0.4rem', flexWrap: 'wrap' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                    {isPassed && (
+                                      <div style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.3rem',
+                                        fontSize: '0.75rem',
+                                        fontWeight: 700,
+                                        color: 'var(--passed-text)'
+                                      }}>
+                                        <CheckCircle2 size={14} />
+                                        <span>{statusInfo.record?.points !== undefined && statusInfo.record?.points !== null ? Number(statusInfo.record.points).toFixed(2) : '3.00'} ({statusInfo.record?.grade || 'P'})</span>
+                                      </div>
+                                    )}
+
+                                    {isSelected && (
+                                      <div className="checkpoint-badge">
+                                        <Check size={12} strokeWidth={3} />
+                                        <span>Checkpointed</span>
+                                      </div>
+                                    )}
+
+                                    {!isSelected && isZeroFailed && (
+                                      <div className="zero-alert">
+                                        <XCircle size={12} />
+                                        <span>0.00 - NOT CROSSED</span>
+                                      </div>
+                                    )}
+
+                                    {!isPassed && !isSelected && !isZeroFailed && (
+                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                        Pending
+                                      </span>
+                                    )}
                                   </div>
-                                )}
 
-                                {isSelected && (
-                                  <div className="checkpoint-badge">
-                                    <Check size={12} strokeWidth={3} />
-                                    <span>Checkpointed</span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    {/* 1-Click Cross / Uncross Action */}
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onToggleCourseCrossed && onToggleCourseCrossed(course.code);
+                                      }}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.2rem',
+                                        padding: '0.12rem 0.45rem',
+                                        borderRadius: '5px',
+                                        fontSize: '0.68rem',
+                                        fontWeight: 600,
+                                        background: isPassed ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                        border: isPassed ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(16, 185, 129, 0.25)',
+                                        color: isPassed ? '#f87171' : '#34d399',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                      title={isPassed ? `Uncross ${course.code} (Mark as not taken)` : `Cross ${course.code} (Mark as passed & strike out)`}
+                                    >
+                                      <span>{isPassed ? 'Uncross' : '✓ Cross'}</span>
+                                    </button>
+
+                                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                                      {course.codeCell}
+                                    </span>
                                   </div>
-                                )}
-
-                                {!isSelected && isZeroFailed && (
-                                  <div className="zero-alert">
-                                    <XCircle size={12} />
-                                    <span>0.00 - NOT CROSSED</span>
-                                  </div>
-                                )}
-
-                                {!isPassed && !isSelected && !isZeroFailed && (
-                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                    Pending
-                                  </span>
-                                )}
-
-                                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                                  {course.codeCell}
-                                </span>
-                              </div>
+                                </div>
                             </div>
                           );
                         })}
@@ -721,7 +816,46 @@ export default function DegreeGrid({
               {activeCourseModal.course.name}
             </h2>
 
-            {/* Checkpoint Selection toggle button inside modal */}
+            {/* When Course is Passed / Crossed: Option to Uncross */}
+            {activeCourseModal.statusInfo.status === 'passed' && (
+              <div style={{
+                marginBottom: '1rem',
+                padding: '0.85rem 1rem',
+                borderRadius: '12px',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.75rem'
+              }}>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <CheckCircle2 size={16} />
+                    <span>Passed &amp; Crossed Out on Sheet</span>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                    This course is marked as completed and will have a diagonal strike line in the degree audit tree.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    onToggleCourseCrossed && onToggleCourseCrossed(activeCourseModal.course.code);
+                    setActiveCourseModal(null);
+                  }}
+                  style={{ fontSize: '0.8rem', padding: '0.4rem 0.9rem', color: '#f87171', borderColor: 'rgba(239, 68, 68, 0.35)' }}
+                  title="Mark this subject as not taken"
+                >
+                  <span>↩ Uncross Subject</span>
+                </button>
+              </div>
+            )}
+
+            {/* Checkpoint Selection and Manual Cross button inside modal */}
             {activeCourseModal.statusInfo.status !== 'passed' && (
               (() => {
                 const isSelected = selectedCodesSet.has(normalizeCode(activeCourseModal.course.code));
@@ -789,45 +923,71 @@ export default function DegreeGrid({
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      disabled={isBlocked}
-                      className={isSelected ? 'btn btn-success' : isBlocked ? 'btn btn-secondary' : 'btn btn-primary'}
-                      onClick={() => onToggleCourseSelection && onToggleCourseSelection(activeCourseModal.course.code)}
-                      style={{
-                        fontSize: '0.8rem',
-                        padding: '0.4rem 0.9rem',
-                        opacity: isBlocked ? 0.6 : 1,
-                        cursor: isBlocked ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {isSelected ? (
-                        <>
-                          <CheckSquare size={15} />
-                          <span>Selected (Remove)</span>
-                        </>
-                      ) : isSeasonBlocked ? (
-                        <>
-                          <Calendar size={15} />
-                          <span>{modalCourseSeason} Term Only</span>
-                        </>
-                      ) : isPrereqBlocked ? (
-                        <>
-                          <Lock size={15} />
-                          <span>Prereqs Not Passed</span>
-                        </>
-                      ) : isLimitBlocked ? (
-                        <>
-                          <ShieldAlert size={15} />
-                          <span>Limit Reached ({regLimit.maxCourses})</span>
-                        </>
-                      ) : (
-                        <>
-                          <Square size={15} />
-                          <span>Select Subject</span>
-                        </>
-                      )}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {/* Manual Cross Subject Action */}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => {
+                          onToggleCourseCrossed && onToggleCourseCrossed(activeCourseModal.course.code);
+                          setActiveCourseModal(null);
+                        }}
+                        style={{
+                          fontSize: '0.8rem',
+                          padding: '0.4rem 0.85rem',
+                          color: '#10b981',
+                          borderColor: 'rgba(16, 185, 129, 0.35)',
+                          background: 'rgba(16, 185, 129, 0.08)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.35rem'
+                        }}
+                        title="Mark this subject as passed & crossed out in the degree audit tree"
+                      >
+                        <Check size={14} />
+                        <span>✓ Cross Subject (Pass)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isBlocked}
+                        className={isSelected ? 'btn btn-success' : isBlocked ? 'btn btn-secondary' : 'btn btn-primary'}
+                        onClick={() => onToggleCourseSelection && onToggleCourseSelection(activeCourseModal.course.code)}
+                        style={{
+                          fontSize: '0.8rem',
+                          padding: '0.4rem 0.9rem',
+                          opacity: isBlocked ? 0.6 : 1,
+                          cursor: isBlocked ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {isSelected ? (
+                          <>
+                            <CheckSquare size={15} />
+                            <span>Selected (Remove)</span>
+                          </>
+                        ) : isSeasonBlocked ? (
+                          <>
+                            <Calendar size={15} />
+                            <span>{modalCourseSeason} Term Only</span>
+                          </>
+                        ) : isPrereqBlocked ? (
+                          <>
+                            <Lock size={15} />
+                            <span>Prereqs Not Passed</span>
+                          </>
+                        ) : isLimitBlocked ? (
+                          <>
+                            <ShieldAlert size={15} />
+                            <span>Limit Reached ({regLimit.maxCourses})</span>
+                          </>
+                        ) : (
+                          <>
+                            <Square size={15} />
+                            <span>Select Subject</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 );
               })()
@@ -1128,6 +1288,15 @@ export default function DegreeGrid({
           </div>
         </div>
       )}
+
+      {/* Modal for Managing / Bulk Crossing Subjects */}
+      <CrossSubjectsModal
+        isOpen={isCrossModalOpen}
+        onClose={() => setIsCrossModalOpen(false)}
+        student={student}
+        onToggleCourseCrossed={onToggleCourseCrossed}
+        onBulkCrossCourses={onBulkCrossCourses}
+      />
     </div>
   );
 }
