@@ -1,5 +1,5 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { normalizeCode } from './courseMapping.js';
+import { normalizeCode, normalizeProgramId } from './courseMapping.js';
 
 // Configure PDF.js worker for Vite browser environment
 if (typeof window !== 'undefined') {
@@ -15,7 +15,7 @@ if (typeof window !== 'undefined') {
  * @param {string} fileName
  * @returns {Promise<Object>}
  */
-export async function parseTranscriptPdf(pdfData, fileName = 'Transcript.pdf') {
+export async function parseTranscriptPdf(pdfData, fileName = 'Transcript.pdf', targetProgram = 'AI') {
   const loadingTask = pdfjsLib.getDocument({
     data: pdfData,
     cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/cmaps/',
@@ -78,7 +78,7 @@ export async function parseTranscriptPdf(pdfData, fileName = 'Transcript.pdf') {
     fullText += '\n' + pageStr;
   }
 
-  return parseTranscriptText(fullText, fileName);
+  return parseTranscriptText(fullText, fileName, targetProgram);
 }
 
 /**
@@ -128,7 +128,7 @@ export function cleanArabicText(text) {
 /**
  * Parses raw text extracted from the university transcript PDF
  */
-export function parseTranscriptText(text, fileName = '') {
+export function parseTranscriptText(text, fileName = '', targetProgram = 'AI') {
   // Clean null bytes and invalid control characters from raw text immediately
   const cleanRawText = (text || '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
 
@@ -155,7 +155,25 @@ export function parseTranscriptText(text, fileName = '') {
   const admissionYear = admissionMatch ? admissionMatch[1].trim() : '';
   const registeredHours = regHoursMatch ? parseInt(regHoursMatch[1], 10) : null;
   const achievedHours = achHoursMatch ? parseInt(achHoursMatch[1], 10) : null;
-  const program = programMatch ? programMatch[1].trim() : 'Artificial Intelligence';
+
+  // Determine program from text or fallback to targetProgram
+  let detectedProgram = (targetProgram || 'AI').toUpperCase().includes('EEP') ? 'EEP' : 'AI';
+  if (programMatch) {
+    const pStr = programMatch[1].trim().toLowerCase();
+    if (pStr.includes('energy') || pStr.includes('power') || pStr.includes('eep') || pStr.includes('epp') || pStr.includes('كهرباء') || pStr.includes('طاقة') || pStr.includes('قوى')) {
+      detectedProgram = 'EEP';
+    } else if (pStr.includes('ai') || pStr.includes('intelligence') || pStr.includes('ذكاء')) {
+      detectedProgram = 'AI';
+    }
+  } else {
+    if (/energy\s+and\s+electrical\s+power|هندسة\s+القوى\s+والطاقة\s+الكهربية|قوى\s+وكهرباء/i.test(cleanRawText)) {
+      detectedProgram = 'EEP';
+    } else if (/artificial\s+intelligence|الذكاء\s+الاصطناعي/i.test(cleanRawText)) {
+      detectedProgram = 'AI';
+    }
+  }
+
+  const program = detectedProgram;
 
   // Extract all courses
   // Course line patterns: Course Code, Course Name, Credit, Points, Grade
@@ -273,7 +291,19 @@ export function parseTranscriptText(text, fileName = '') {
   const summerSemesters = allSemesterTables.filter(s => s.isSummer);
 
   // Map regular semesters to curriculum levels (Level 0 Fall/Spring, Level 1 Fall/Spring, etc.)
-  const semesterGpaCellMap = [
+  const isEpp = normalizeProgramId(program || targetProgram) === 'EEP';
+  const semesterGpaCellMap = isEpp ? [
+    { level: 0, semester: 1, gpaCell: 'Y10', chCell: 'Z10' },
+    { level: 0, semester: 2, gpaCell: 'Y20', chCell: 'Z20' },
+    { level: 1, semester: 1, gpaCell: 'Y30', chCell: 'Z30' },
+    { level: 1, semester: 2, gpaCell: 'Y40', chCell: 'Z40' },
+    { level: 2, semester: 1, gpaCell: 'Y50', chCell: 'Z50' },
+    { level: 2, semester: 2, gpaCell: 'Y60', chCell: 'Z60' },
+    { level: 3, semester: 1, gpaCell: 'Y70', chCell: 'Z70' },
+    { level: 3, semester: 2, gpaCell: 'Y80', chCell: 'Z80' },
+    { level: 4, semester: 1, gpaCell: 'Y90', chCell: 'Z90' },
+    { level: 4, semester: 2, gpaCell: 'Y100', chCell: 'Z100' },
+  ] : [
     { level: 0, semester: 1, gpaCell: 'W7', chCell: 'X7' },
     { level: 0, semester: 2, gpaCell: 'W11', chCell: 'X11' },
     { level: 1, semester: 1, gpaCell: 'W16', chCell: 'X16' },

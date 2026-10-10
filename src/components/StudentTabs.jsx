@@ -1,5 +1,6 @@
 import React from 'react';
-import { User, CheckCircle2, XCircle, UserPlus } from 'lucide-react';
+import { User, CheckCircle2, XCircle, UserPlus, Zap } from 'lucide-react';
+import { normalizeProgramId } from '../services/courseMapping.js';
 
 export default function StudentTabs({ students, activeIndex, onSelectTab, onOpenAddStudent }) {
   if (!students || students.length === 0) return null;
@@ -15,6 +16,8 @@ export default function StudentTabs({ students, activeIndex, onSelectTab, onOpen
     }}>
       {students.map((student, idx) => {
         const isActive = idx === activeIndex;
+        const isEep = normalizeProgramId(student.program) === 'EEP';
+
         return (
           <button
             key={idx}
@@ -23,11 +26,32 @@ export default function StudentTabs({ students, activeIndex, onSelectTab, onOpen
             style={{
               padding: '0.5rem 1rem',
               whiteSpace: 'nowrap',
-              border: isActive ? '1px solid var(--border-focus)' : '1px solid var(--border-color)',
-              background: isActive ? 'var(--bg-secondary)' : 'rgba(255, 255, 255, 0.02)'
+              border: isActive
+                ? (isEep ? '1px solid #eab308' : '1px solid var(--border-focus)')
+                : '1px solid var(--border-color)',
+              background: isActive
+                ? (isEep ? 'rgba(234, 179, 8, 0.12)' : 'var(--bg-secondary)')
+                : 'rgba(255, 255, 255, 0.02)'
             }}
           >
-            <User size={15} style={{ color: isActive ? '#818cf8' : 'var(--text-muted)' }} />
+            {isEep ? (
+              <Zap size={14} style={{ color: '#eab308' }} />
+            ) : (
+              <User size={14} style={{ color: isActive ? '#818cf8' : 'var(--text-muted)' }} />
+            )}
+
+            <span style={{
+              fontSize: '0.65rem',
+              fontWeight: 800,
+              padding: '0.08rem 0.35rem',
+              borderRadius: '4px',
+              background: isEep ? 'rgba(234, 179, 8, 0.25)' : 'rgba(99, 102, 241, 0.2)',
+              color: isEep ? '#fde047' : '#c7d2fe',
+              letterSpacing: '0.02em'
+            }}>
+              {isEep ? 'EEP' : 'AI'}
+            </span>
+
             <span style={{ fontWeight: isActive ? 700 : 500 }}>
               {student.studentName || `Student ${idx + 1}`}
             </span>

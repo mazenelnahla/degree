@@ -1,15 +1,18 @@
 import React from 'react';
-import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert, Calendar, Trash2 } from 'lucide-react';
-import { getRegistrationLimit, getStudentRegistrationSeason } from '../services/courseMapping.js';
+import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert, Calendar, Trash2, Zap } from 'lucide-react';
+import { getRegistrationLimit, getStudentRegistrationSeason, normalizeProgramId } from '../services/courseMapping.js';
 
 export default function StudentHeader({ student, onDeleteStudent, onOpenCrossModal }) {
   if (!student) return null;
 
+  const isEep = normalizeProgramId(student?.program) === 'EEP';
+  const programName = isEep ? 'Energy & Electrical Power (EEP)' : 'Artificial Intelligence (AI)';
   const activeSeason = getStudentRegistrationSeason(student);
   const aiLevel = student.aiLevel ?? Math.max(1, student.allSemesterTables?.length ?? 0);
   const aiLevelSuffix = aiLevel % 100 >= 11 && aiLevel % 100 <= 13
     ? 'th'
     : ({ 1: 'st', 2: 'nd', 3: 'rd' }[aiLevel % 10] || 'th');
+  const levelLabel = isEep ? `${aiLevel}${aiLevelSuffix} EEP Level` : `${aiLevel}${aiLevelSuffix} AI Level`;
 
   const getCgpaColor = (gpa) => {
     if (gpa === null || gpa === undefined) return 'text-gray-400';
@@ -30,14 +33,16 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
             width: '56px',
             height: '56px',
             borderRadius: '16px',
-            background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+            background: isEep
+              ? 'linear-gradient(135deg, #eab308, #f97316)'
+              : 'linear-gradient(135deg, #6366f1, #06b6d4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#fff',
-            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)'
+            color: isEep ? '#1c1917' : '#fff',
+            boxShadow: isEep ? '0 4px 14px rgba(234, 179, 8, 0.35)' : '0 4px 14px rgba(99, 102, 241, 0.3)'
           }}>
-            <User size={28} />
+            {isEep ? <Zap size={28} /> : <User size={28} />}
           </div>
 
           <div>
@@ -50,6 +55,17 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
                   ID: {student.studentId}
                 </span>
               )}
+              <span style={{
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                padding: '0.15rem 0.55rem',
+                borderRadius: '9999px',
+                background: isEep ? 'rgba(234, 179, 8, 0.2)' : 'rgba(99, 102, 241, 0.2)',
+                color: isEep ? '#fde047' : '#c7d2fe',
+                border: isEep ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid rgba(99, 102, 241, 0.4)'
+              }}>
+                {isEep ? '⚡ EEP Program' : '🤖 AI Track'}
+              </span>
               {onOpenCrossModal && (
                 <button
                   type="button"
@@ -95,8 +111,8 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
             </div>
 
             <div style={{ display: 'flex', gap: '0.85rem', marginTop: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.85rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              <span>Program: <strong style={{ color: 'var(--text-primary)' }}>{student.program || 'Artificial Intelligence'}</strong></span>
-              <span>• <strong style={{ color: 'var(--text-primary)' }}>{aiLevel}{aiLevelSuffix} AI Level</strong></span>
+              <span>Program: <strong style={{ color: 'var(--text-primary)' }}>{programName}</strong></span>
+              <span>• <strong style={{ color: 'var(--text-primary)' }}>{levelLabel}</strong></span>
               {student.admissionYear && (
                 <span>• Admission: <strong style={{ color: 'var(--text-primary)' }}>{student.admissionYear}</strong></span>
               )}

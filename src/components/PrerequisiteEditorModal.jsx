@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { ALL_COURSES, normalizeCode, downloadPrerequisitesJson } from '../services/courseMapping.js';
-import { GitFork, Plus, Trash2, RotateCcw, Save, X, Search, Check, AlertCircle, ArrowRight, CornerDownRight, Download, Upload, BookmarkCheck } from 'lucide-react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { getAllCourses, normalizeCode, normalizeProgramId, downloadPrerequisitesJson, loadPrerequisiteLinks } from '../services/courseMapping.js';
+import { GitFork, Plus, Trash2, RotateCcw, Save, X, Search, Check, AlertCircle, ArrowRight, CornerDownRight, Download, Upload, BookmarkCheck, Zap } from 'lucide-react';
 
 export default function PrerequisiteEditorModal({
   isOpen,
@@ -9,8 +9,10 @@ export default function PrerequisiteEditorModal({
   prerequisiteLinks,
   onSavePrerequisites,
   onMakeDefault,
-  onResetPrerequisites
+  onResetPrerequisites,
+  activeProgram = 'AI'
 }) {
+  const [selectedProgram, setSelectedProgram] = useState(() => normalizeProgramId(activeProgram));
   const [selectedCourseCode, setSelectedCourseCode] = useState(initialCourseCode || 'BSC 012');
   const [searchFilter, setSearchFilter] = useState('');
   const [selectedPrereqToAdd, setSelectedPrereqToAdd] = useState('');
@@ -19,22 +21,36 @@ export default function PrerequisiteEditorModal({
   const [hasChanges, setHasChanges] = useState(false);
   const [savedAlert, setSavedAlert] = useState(false);
 
-  // Sync if opened or links prop changed initially
-  React.useEffect(() => {
-    setLinks([...prerequisiteLinks]);
-    setHasChanges(false);
-  }, [prerequisiteLinks, isOpen]);
-
-  // When opened with an initialCourseCode or initialCourseCode changes, update selectedCourseCode
-  React.useEffect(() => {
-    if (initialCourseCode) {
-      setSelectedCourseCode(initialCourseCode);
-    } else if (isOpen && !selectedCourseCode) {
-      setSelectedCourseCode('BSC 012');
+  // Sync activeProgram when modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      const norm = normalizeProgramId(activeProgram);
+      setSelectedProgram(norm);
+      setLinks([...prerequisiteLinks]);
+      setHasChanges(false);
+      const courses = getAllCourses(norm);
+      if (initialCourseCode) {
+        setSelectedCourseCode(initialCourseCode);
+      } else if (courses.length > 0) {
+        setSelectedCourseCode(courses[0].code);
+      }
     }
-  }, [initialCourseCode, isOpen]);
+  }, [isOpen, activeProgram, prerequisiteLinks, initialCourseCode]);
 
-  const currentCourse = ALL_COURSES.find(c => normalizeCode(c.code) === normalizeCode(selectedCourseCode)) || ALL_COURSES[0];
+  const allCourses = useMemo(() => getAllCourses(selectedProgram), [selectedProgram]);
+
+  const handleSwitchProgram = (prog) => {
+    const norm = normalizeProgramId(prog);
+    if (norm === selectedProgram) return;
+    setSelectedProgram(norm);
+    const newCourses = getAllCourses(norm);
+    setSelectedCourseCode(newCourses[0]?.code || '');
+    const progLinks = loadPrerequisiteLinks(norm);
+    setLinks(progLinks);
+    setHasChanges(false);
+  };
+
+  const currentCourse = allCourses.find(c => normalizeCode(c.code) === normalizeCode(selectedCourseCode)) || allCourses[0];
   const normCurrent = normalizeCode(currentCourse?.code || '');
 
   // Current prerequisites required for this course (links where `to` === currentCourse)
@@ -50,35 +66,35 @@ export default function PrerequisiteEditorModal({
   // Courses available to add as prerequisites (exclude self and already added)
   const availablePrereqCandidates = useMemo(() => {
     const existingNorms = new Set(currentRequires.map(r => normalizeCode(r.from)));
-    return ALL_COURSES.filter(c => {
+    return allCourses.filter(c => {
       const cNorm = normalizeCode(c.code);
       return cNorm !== normCurrent && !existingNorms.has(cNorm);
     });
-  }, [currentRequires, normCurrent]);
+  }, [currentRequires, normCurrent, allCourses]);
 
   // Courses available to add as unlocked by this course (exclude self and already unlocked)
   const availableUnlockCandidates = useMemo(() => {
     const existingNorms = new Set(currentUnlocks.map(u => normalizeCode(u.to)));
-    return ALL_COURSES.filter(c => {
+    return allCourses.filter(c => {
       const cNorm = normalizeCode(c.code);
       return cNorm !== normCurrent && !existingNorms.has(cNorm);
     });
-  }, [currentUnlocks, normCurrent]);
+  }, [currentUnlocks, normCurrent, allCourses]);
 
   // Filtered course list for course picker
   const filteredCourses = useMemo(() => {
-    if (!searchFilter.trim()) return ALL_COURSES;
+    if (!searchFilter.trim()) return allCourses;
     const term = searchFilter.toLowerCase().trim();
-    return ALL_COURSES.filter(c => 
+    return allCourses.filter(c => 
       c.code.toLowerCase().includes(term) || 
       c.name.toLowerCase().includes(term) ||
       normalizeCode(c.code).toLowerCase().includes(term)
     );
-  }, [searchFilter]);
+  }, [searchFilter, allCourses]);
 
   const handleAddPrerequisite = () => {
     if (!selectedPrereqToAdd) return;
-    const prereqCourse = ALL_COURSES.find(c => normalizeCode(c.code) === normalizeCode(selectedPrereqToAdd));
+    const prereqCourse = allCourses.find(c => normalizeCode(c.code) === normalizeCode(selectedPrereqToAdd));
     if (!prereqCourse) return;
 
     // Check if link already exists
@@ -97,7 +113,7 @@ export default function PrerequisiteEditorModal({
 
   const handleAddUnlock = () => {
     if (!selectedUnlockToAdd) return;
-    const unlockedCourse = ALL_COURSES.find(c => normalizeCode(c.code) === normalizeCode(selectedUnlockToAdd));
+    const unlockedCourse = allCourses.find(c => normalizeCode(c.code) === normalizeCode(selectedUnlockToAdd));
     if (!unlockedCourse) return;
 
     const exists = links.some(l =>
@@ -130,14 +146,14 @@ export default function PrerequisiteEditorModal({
   };
 
   const handleSave = async () => {
-    await onSavePrerequisites(links);
+    await onSavePrerequisites(links, selectedProgram);
     setHasChanges(false);
     setSavedAlert(true);
     setTimeout(() => setSavedAlert(false), 3000);
   };
 
   const handleDownload = () => {
-    downloadPrerequisitesJson(links);
+    downloadPrerequisitesJson(links, selectedProgram);
   };
 
   const handleFileUpload = (e) => {
@@ -165,11 +181,11 @@ export default function PrerequisiteEditorModal({
   };
 
   const handleMakeDefault = async () => {
-    if (window.confirm('Set current prerequisite links as the permanent system default? This will be saved to disk as the base curriculum.')) {
+    if (window.confirm(`Set current prerequisite links as the permanent system default for ${selectedProgram} curriculum? This will be saved to disk as the base curriculum.`)) {
       if (onMakeDefault) {
-        await onMakeDefault(links);
+        await onMakeDefault(links, selectedProgram);
       } else {
-        await onSavePrerequisites(links);
+        await onSavePrerequisites(links, selectedProgram);
       }
       setHasChanges(false);
       setSavedAlert(true);
@@ -178,8 +194,8 @@ export default function PrerequisiteEditorModal({
   };
 
   const handleReset = async () => {
-    if (window.confirm('Reset all prerequisite connections back to default curriculum settings?')) {
-      const defaultLinks = await onResetPrerequisites();
+    if (window.confirm(`Reset all ${selectedProgram} prerequisite connections back to default curriculum settings?`)) {
+      const defaultLinks = await onResetPrerequisites(selectedProgram);
       setLinks(defaultLinks);
       setHasChanges(false);
       setSavedAlert(true);
@@ -197,27 +213,66 @@ export default function PrerequisiteEditorModal({
         style={{ maxWidth: '860px', width: '92%', maxHeight: '90vh', display: 'flex', flexDirection: 'column', padding: '1.75rem' }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{
               width: '40px',
               height: '40px',
               borderRadius: '10px',
-              background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              background: selectedProgram === 'EEP'
+                ? 'linear-gradient(135deg, #eab308, #f97316)'
+                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'white',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)'
+              color: selectedProgram === 'EEP' ? '#1c1917' : 'white',
+              boxShadow: selectedProgram === 'EEP' ? '0 4px 12px rgba(234, 179, 8, 0.3)' : '0 4px 12px rgba(99, 102, 241, 0.3)'
             }}>
-              <GitFork size={22} />
+              {selectedProgram === 'EEP' ? <Zap size={22} /> : <GitFork size={22} />}
             </div>
             <div>
-              <h2 style={{ fontSize: '1.3rem', fontWeight: 700, margin: 0 }}>
-                Prerequisites Manager
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <h2 style={{ fontSize: '1.3rem', fontWeight: 700, margin: 0 }}>
+                  Prerequisites Manager
+                </h2>
+                {/* Program Selector Tabs in Modal */}
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchProgram('AI')}
+                    style={{
+                      padding: '0.2rem 0.55rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: selectedProgram === 'AI' ? 700 : 500,
+                      background: selectedProgram === 'AI' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
+                      border: selectedProgram === 'AI' ? '1px solid #6366f1' : '1px solid var(--border-color)',
+                      color: selectedProgram === 'AI' ? '#c7d2fe' : 'var(--text-muted)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🤖 AI Track
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSwitchProgram('EEP')}
+                    style={{
+                      padding: '0.2rem 0.55rem',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: selectedProgram === 'EEP' ? 700 : 500,
+                      background: selectedProgram === 'EEP' ? 'rgba(234, 179, 8, 0.25)' : 'transparent',
+                      border: selectedProgram === 'EEP' ? '1px solid #eab308' : '1px solid var(--border-color)',
+                      color: selectedProgram === 'EEP' ? '#fde047' : 'var(--text-muted)',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    ⚡ EEP Program
+                  </button>
+                </div>
+              </div>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: 0 }}>
-                Edit prerequisite requirements and unlock relations for each subject. Automatically saved to local file &amp; browser.
+                Editing <strong>{selectedProgram === 'EEP' ? 'Energy & Electrical Power' : 'Artificial Intelligence'}</strong> prerequisite requirements ({links.length} connections).
               </p>
             </div>
           </div>
@@ -437,7 +492,7 @@ export default function PrerequisiteEditorModal({
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
                   {currentRequires.map(req => {
-                    const reqInfo = ALL_COURSES.find(c => normalizeCode(c.code) === normalizeCode(req.from));
+                    const reqInfo = allCourses.find(c => normalizeCode(c.code) === normalizeCode(req.from));
                     return (
                       <div
                         key={req.from}
@@ -568,7 +623,7 @@ export default function PrerequisiteEditorModal({
               ) : (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
                   {currentUnlocks.map(unl => {
-                    const unlInfo = ALL_COURSES.find(c => normalizeCode(c.code) === normalizeCode(unl.to));
+                    const unlInfo = allCourses.find(c => normalizeCode(c.code) === normalizeCode(unl.to));
                     return (
                       <div
                         key={unl.to}

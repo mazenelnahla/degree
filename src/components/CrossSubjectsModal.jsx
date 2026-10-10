@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, CheckSquare, Square, Check, BookOpen, AlertCircle, Sparkles, Filter, CheckCircle2 } from 'lucide-react';
-import { DEGREE_STRUCTURE, ALL_COURSES, normalizeCode } from '../services/courseMapping.js';
+import { getDegreeStructure, getAllCourses, normalizeCode, normalizeProgramId } from '../services/courseMapping.js';
 
 export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleCourseCrossed, onBulkCrossCourses }) {
   const [activeLevelTab, setActiveLevelTab] = useState(0);
@@ -19,11 +19,15 @@ export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleC
 
   if (!isOpen || !student) return null;
 
-  const currentLevelData = DEGREE_STRUCTURE.find(l => l.level === activeLevelTab);
+  const studentProg = normalizeProgramId(student.program || 'AI');
+  const degreeStructure = getDegreeStructure(studentProg);
+  const isEep = studentProg === 'EEP';
+
+  const currentLevelData = degreeStructure.find(l => l.level === activeLevelTab);
   const passedCoursesCount = student.passedCount || Object.values(student.courseMap || {}).filter(c => c.isPassed && (c.points === undefined || c.points > 0)).length;
 
   const handleSelectLevelCourses = (lvl) => {
-    const lvlConfig = DEGREE_STRUCTURE.find(l => l.level === lvl);
+    const lvlConfig = degreeStructure.find(l => l.level === lvl);
     if (!lvlConfig) return;
     const codesInLevel = lvlConfig.semesters.flatMap(s => s.courses.map(c => c.code));
     if (onBulkCrossCourses) {
@@ -32,7 +36,7 @@ export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleC
   };
 
   const handleDeselectLevelCourses = (lvl) => {
-    const lvlConfig = DEGREE_STRUCTURE.find(l => l.level === lvl);
+    const lvlConfig = degreeStructure.find(l => l.level === lvl);
     if (!lvlConfig) return;
     const codesInLevel = lvlConfig.semesters.flatMap(s => s.courses.map(c => c.code));
     if (onBulkCrossCourses) {
@@ -65,22 +69,35 @@ export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleC
               width: '40px',
               height: '40px',
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, #10b981, #06b6d4)',
+              background: isEep
+                ? 'linear-gradient(135deg, #eab308, #f97316)'
+                : 'linear-gradient(135deg, #10b981, #06b6d4)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#fff',
-              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+              color: isEep ? '#1c1917' : '#fff',
+              boxShadow: isEep ? '0 4px 12px rgba(234, 179, 8, 0.3)' : '0 4px 12px rgba(16, 185, 129, 0.3)'
             }}>
               <CheckCircle2 size={22} />
             </div>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
                   Manage Crossed Subjects
                 </h2>
                 <span className="code-pill" style={{ fontSize: '0.75rem' }}>
                   {student.studentName} ({student.studentId || 'ID'})
+                </span>
+                <span style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  padding: '0.12rem 0.5rem',
+                  borderRadius: '9999px',
+                  background: isEep ? 'rgba(234, 179, 8, 0.18)' : 'rgba(99, 102, 241, 0.18)',
+                  color: isEep ? '#fde047' : '#c7d2fe',
+                  border: isEep ? '1px solid rgba(234, 179, 8, 0.35)' : '1px solid rgba(99, 102, 241, 0.35)'
+                }}>
+                  {isEep ? '⚡ EEP Program' : '🤖 AI Track'}
                 </span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.15rem 0 0' }}>

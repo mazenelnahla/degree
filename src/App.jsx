@@ -10,7 +10,24 @@ import {
 import { parseStudentRosterExcel, normalizeStudentId } from './services/rosterParser.js';
 import { parseExportedDegreeWorkbook } from './services/excelDegreeParser.js';
 import { exportProjectBackup, parseProjectBackup } from './services/projectBackup.js';
-import { normalizeCode, ALL_COURSES, loadPrerequisiteLinks, savePrerequisiteLinks, resetPrerequisiteLinks, fetchFilePrerequisiteLinks, downloadPrerequisitesJson, makeDefaultPrerequisiteLinks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason } from './services/courseMapping.js';
+import {
+  normalizeCode,
+  normalizeProgramId,
+  getAllCourses,
+  getDegreeStructure,
+  ALL_COURSES,
+  loadPrerequisiteLinks,
+  savePrerequisiteLinks,
+  resetPrerequisiteLinks,
+  fetchFilePrerequisiteLinks,
+  downloadPrerequisitesJson,
+  makeDefaultPrerequisiteLinks,
+  checkPrerequisitesMet,
+  getRegistrationLimit,
+  getCourseSeason,
+  getStudentRegistrationSeason,
+  isCourseEligibleForSeason
+} from './services/courseMapping.js';
 
 import StudentHeader from './components/StudentHeader.jsx';
 import DegreeGrid from './components/DegreeGrid.jsx';
@@ -20,11 +37,15 @@ import ExportControls from './components/ExportControls.jsx';
 import PrerequisiteEditorModal from './components/PrerequisiteEditorModal.jsx';
 import AddStudentModal from './components/AddStudentModal.jsx';
 import CrossSubjectsModal from './components/CrossSubjectsModal.jsx';
-import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork, Save, FolderUp, UserPlus, CheckSquare } from 'lucide-react';
+import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork, Save, FolderUp, UserPlus, CheckSquare, Zap } from 'lucide-react';
 
 export default function App() {
-  const [templateBuffer, setTemplateBuffer] = useState(null);
-  const [templateName, setTemplateName] = useState('template.xlsx');
+  const [activeProgram, setActiveProgram] = useState('AI');
+  const [aiTemplateBuffer, setAiTemplateBuffer] = useState(null);
+  const [eepTemplateBuffer, setEepTemplateBuffer] = useState(null);
+  const [customTemplateBuffer, setCustomTemplateBuffer] = useState(null);
+  const [customTemplateName, setCustomTemplateName] = useState(null);
+
   const [students, setStudents] = useState([]);
   const [activeStudentIndex, setActiveStudentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,8 +59,9 @@ export default function App() {
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const [isCrossSubjectsModalOpen, setIsCrossSubjectsModalOpen] = useState(false);
   
-  // Prerequisite links state (persisted in localStorage + public/prerequisites.json local file)
-  const [prerequisiteLinks, setPrerequisiteLinks] = useState(() => loadPrerequisiteLinks());
+  // Prerequisite links state for each program
+  const [aiPrereqLinks, setAiPrereqLinks] = useState(() => loadPrerequisiteLinks('AI'));
+  const [eepPrereqLinks, setEepPrereqLinks] = useState(() => loadPrerequisiteLinks('EEP'));
   const [isPrereqModalOpen, setIsPrereqModalOpen] = useState(false);
   const [initialPrereqModalCourse, setInitialPrereqModalCourse] = useState(null);
 
@@ -84,40 +106,67 @@ export default function App() {
     }
   };
 
-  // Load persisted prerequisites from local file on start (syncs across browsers)
+  // Load persisted prerequisites from local file on start for both programs
   useEffect(() => {
     async function loadInitialPrerequisites() {
-      const fileLinks = await fetchFilePrerequisiteLinks();
-      if (fileLinks && Array.isArray(fileLinks) && fileLinks.length > 0) {
-        setPrerequisiteLinks(fileLinks);
-        console.log(`Loaded ${fileLinks.length} prerequisite rules from local file /prerequisites.json`);
+      try {
+        const [aiFileLinks, eepFileLinks] = await Promise.all([
+          fetchFilePrerequisiteLinks('AI'),
+          fetchFilePrerequisiteLinks('EEP')
+        ]);
+        if (aiFileLinks && Array.isArray(aiFileLinks) && aiFileLinks.length > 0) {
+          setAiPrereqLinks(aiFileLinks);
+          console.log(`Loaded ${aiFileLinks.length} AI prerequisite rules from /prerequisites.json`);
+        }
+        if (eepFileLinks && Array.isArray(eepFileLinks) && eepFileLinks.length > 0) {
+          setEepPrereqLinks(eepFileLinks);
+          console.log(`Loaded ${eepFileLinks.length} EEP prerequisite rules from /prerequisites_eep.json`);
+        }
+      } catch (err) {
+        console.warn('Could not load initial prerequisite files:', err);
       }
     }
     loadInitialPrerequisites();
   }, []);
 
-  // Prerequisite link handlers
-  const handleSavePrerequisites = async (newLinks) => {
-    const result = await savePrerequisiteLinks(newLinks);
-    setPrerequisiteLinks(newLinks);
-    if (result?.localFile) {
-      setStatusMessage(`Prerequisite links saved to local file & browser (${newLinks.length} connections).`);
+  // Prerequisite link handlers (program aware)
+  const handleSavePrerequisites = async (newLinks, progId = activeProgram) => {
+    const norm = normalizeProgramId(progId);
+    const result = await savePrerequisiteLinks(newLinks, norm);
+    if (norm === 'EEP') {
+      setEepPrereqLinks(newLinks);
     } else {
-      setStatusMessage(`Prerequisite links saved (${newLinks.length} connections).`);
+      setAiPrereqLinks(newLinks);
     }
-  };
-
-  const handleMakeDefaultPrerequisites = async (linksToSetDefault) => {
-    const result = await makeDefaultPrerequisiteLinks(linksToSetDefault);
-    setPrerequisiteLinks(linksToSetDefault);
-    setStatusMessage(`Saved current prerequisite links (${linksToSetDefault.length} connections) as the permanent default!`);
+    if (result?.localFile) {
+      setStatusMessage(`${norm} prerequisite links saved to local file & browser (${newLinks.length} connections).`);
+    } else {
+      setStatusMessage(`${norm} prerequisite links saved (${newLinks.length} connections).`);
+    }
     return result;
   };
 
-  const handleResetPrerequisites = async () => {
-    const defaults = await resetPrerequisiteLinks();
-    setPrerequisiteLinks(defaults);
-    setStatusMessage(`Prerequisite links reset to default curriculum (${defaults.length} connections).`);
+  const handleMakeDefaultPrerequisites = async (linksToSetDefault, progId = activeProgram) => {
+    const norm = normalizeProgramId(progId);
+    const result = await makeDefaultPrerequisiteLinks(linksToSetDefault, norm);
+    if (norm === 'EEP') {
+      setEepPrereqLinks(linksToSetDefault);
+    } else {
+      setAiPrereqLinks(linksToSetDefault);
+    }
+    setStatusMessage(`Saved ${norm} prerequisite links (${linksToSetDefault.length} connections) as permanent default!`);
+    return result;
+  };
+
+  const handleResetPrerequisites = async (progId = activeProgram) => {
+    const norm = normalizeProgramId(progId);
+    const defaults = await resetPrerequisiteLinks(norm);
+    if (norm === 'EEP') {
+      setEepPrereqLinks(defaults);
+    } else {
+      setAiPrereqLinks(defaults);
+    }
+    setStatusMessage(`${norm} prerequisite links reset to default curriculum (${defaults.length} connections).`);
     return defaults;
   };
 
@@ -131,36 +180,44 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  // Load default template on start
+  // Load both default templates on start
   useEffect(() => {
-    async function loadDefaultTemplate() {
+    async function loadDefaultTemplates() {
       try {
-        // Cache-bust with timestamp and no-store to ensure the latest edited file is loaded
-        const res = await fetch(`/template.xlsx?t=${Date.now()}`, { cache: 'no-store' });
-        if (res.ok) {
-          const buffer = await res.arrayBuffer();
-          setTemplateBuffer(buffer);
-          console.log('Loaded default template from /template.xlsx');
+        const [resAi, resEep] = await Promise.all([
+          fetch(`/template.xlsx?t=${Date.now()}`, { cache: 'no-store' }),
+          fetch(`/EPP Template.xlsx?t=${Date.now()}`, { cache: 'no-store' })
+        ]);
+        if (resAi.ok) {
+          const buf = await resAi.arrayBuffer();
+          setAiTemplateBuffer(buf);
+          console.log('Loaded default AI template from /template.xlsx');
+        }
+        if (resEep.ok) {
+          const buf = await resEep.arrayBuffer();
+          setEepTemplateBuffer(buf);
+          console.log('Loaded default EEP template from /EPP Template.xlsx');
         }
       } catch (err) {
-        console.warn('Could not load default template from /template.xlsx:', err);
+        console.warn('Could not load default templates:', err);
       }
     }
-    loadDefaultTemplate();
+    loadDefaultTemplates();
   }, []);
 
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const handlePdfsLoaded = async (files) => {
+  const handlePdfsLoaded = async (files, targetProg = activeProgram) => {
     setIsLoading(true);
-    setStatusMessage(`Processing ${files.length} PDF transcript file(s)...`);
+    const progLabel = normalizeProgramId(targetProg) === 'EEP' ? 'EEP' : 'AI';
+    setStatusMessage(`Processing ${files.length} PDF transcript file(s) for ${progLabel} track...`);
     try {
       const newStudents = [];
       for (const file of files) {
         const buffer = await file.arrayBuffer();
-        const parsed = await parseTranscriptPdf(buffer, file.name);
+        const parsed = await parseTranscriptPdf(buffer, file.name, targetProg);
 
         let finalName = parsed.studentName;
         const normId = normalizeStudentId(parsed.studentId);
@@ -170,6 +227,7 @@ export default function App() {
 
         newStudents.push({
           ...parsed,
+          program: parsed.program || targetProg,
           studentName: finalName,
           selectedCourseCodes: []
         });
@@ -192,7 +250,7 @@ export default function App() {
         return combined;
       });
 
-      setStatusMessage(`Successfully processed ${files.length} transcript(s).`);
+      setStatusMessage(`Successfully processed ${files.length} transcript(s) for ${progLabel} track.`);
     } catch (err) {
       console.error('Failed to parse PDFs:', err);
       setStatusMessage(`Error processing PDFs: ${err.message}`);
@@ -204,8 +262,8 @@ export default function App() {
   const handleTemplateLoaded = async (file) => {
     try {
       const buffer = await file.arrayBuffer();
-      setTemplateBuffer(buffer);
-      setTemplateName(file.name);
+      setCustomTemplateBuffer(buffer);
+      setCustomTemplateName(file.name);
       setStatusMessage(`Custom template loaded: ${file.name}`);
     } catch (err) {
       console.error('Failed to load custom template:', err);
@@ -214,7 +272,7 @@ export default function App() {
   };
 
   // Handler for loading an exported degree sheet (.xlsx) with registered subjects
-  const handleExportedDegreeWorkbookLoaded = async (fileOrBuffer, fileName = 'Degree_Sheets.xlsx') => {
+  const handleExportedDegreeWorkbookLoaded = async (fileOrBuffer, fileName = 'Degree_Sheets.xlsx', targetProg = activeProgram) => {
     setIsLoading(true);
     setStatusMessage(`Restoring students & registered subjects from ${fileName}...`);
     try {
@@ -222,7 +280,7 @@ export default function App() {
         ? fileOrBuffer
         : (fileOrBuffer.arrayBuffer ? await fileOrBuffer.arrayBuffer() : fileOrBuffer);
 
-      const parsedStudents = await parseExportedDegreeWorkbook(buffer);
+      const parsedStudents = await parseExportedDegreeWorkbook(buffer, targetProg);
 
       if (!parsedStudents || parsedStudents.length === 0) {
         throw new Error('No student degree sheets or courses detected in this Excel file.');
@@ -281,12 +339,18 @@ export default function App() {
       return;
     }
     try {
+      const activeStudentProg = normalizeProgramId(activeStudent?.program || activeProgram);
+      const activePrereq = activeStudentProg === 'EEP' ? eepPrereqLinks : aiPrereqLinks;
+      const currentTmplName = customTemplateName || (activeStudentProg === 'EEP' ? 'EPP Template.xlsx' : 'template.xlsx');
       const filename = exportProjectBackup({
         students,
-        prerequisiteLinks,
+        prerequisiteLinks: activePrereq,
+        aiPrereqLinks,
+        eepPrereqLinks,
+        activeProgram,
         rosterInfo,
         rosterMap,
-        templateName
+        templateName: currentTmplName
       });
       setStatusMessage(`Project backup downloaded successfully: ${filename}`);
     } catch (err) {
@@ -304,12 +368,25 @@ export default function App() {
       if (restored.students && restored.students.length > 0) {
         setStudents(restored.students);
         setActiveStudentIndex(0);
+        if (restored.students[0]?.program) {
+          setActiveProgram(normalizeProgramId(restored.students[0].program));
+        }
+      }
+      if (restored.aiPrereqLinks && Array.isArray(restored.aiPrereqLinks)) {
+        setAiPrereqLinks(restored.aiPrereqLinks);
+      }
+      if (restored.eepPrereqLinks && Array.isArray(restored.eepPrereqLinks)) {
+        setEepPrereqLinks(restored.eepPrereqLinks);
       }
       if (restored.prerequisiteLinks && Array.isArray(restored.prerequisiteLinks)) {
-        setPrerequisiteLinks(restored.prerequisiteLinks);
+        if (restored.activeProgram === 'EEP') {
+          setEepPrereqLinks(restored.prerequisiteLinks);
+        } else {
+          setAiPrereqLinks(restored.prerequisiteLinks);
+        }
       }
       if (restored.templateName) {
-        setTemplateName(restored.templateName);
+        setCustomTemplateName(restored.templateName);
       }
       if (restored.rosterInfo) {
         setRosterInfo(restored.rosterInfo);
@@ -336,8 +413,12 @@ export default function App() {
       aiLevel = 1,
       cgpa = 3.0,
       admissionYear = '2024',
+      program = activeProgram,
       crossedCourseCodes = []
     } = manualData;
+
+    const studentProg = normalizeProgramId(program || activeProgram);
+    const progCourses = getAllCourses(studentProg);
 
     let finalName = studentName;
     const normId = normalizeStudentId(studentId);
@@ -348,7 +429,7 @@ export default function App() {
     const courseMap = {};
     const crossedSet = new Set(crossedCourseCodes.map(normalizeCode));
 
-    ALL_COURSES.forEach(course => {
+    progCourses.forEach(course => {
       const norm = normalizeCode(course.code);
       const isCrossed = crossedSet.has(norm) || (course.aliases && course.aliases.some(a => crossedSet.has(normalizeCode(a))));
       if (isCrossed) {
@@ -365,7 +446,7 @@ export default function App() {
     });
 
     const passedCount = Object.keys(courseMap).length;
-    const achievedHours = ALL_COURSES
+    const achievedHours = progCourses
       .filter(c => courseMap[normalizeCode(c.code)]?.isPassed)
       .reduce((sum, c) => sum + (c.ch || 3), 0);
 
@@ -376,7 +457,7 @@ export default function App() {
       admissionYear: admissionYear || '2024',
       registeredHours: 0,
       achievedHours: achievedHours || (passedCount * 3),
-      program: 'Artificial Intelligence',
+      program: studentProg,
       rawCourses: [],
       courseMap,
       passedCount,
@@ -416,7 +497,7 @@ export default function App() {
       return combined;
     });
 
-    setStatusMessage(`Successfully added student "${finalName}" (${studentId}) with ${passedCount} passed/crossed course(s).`);
+    setStatusMessage(`Successfully added ${studentProg} student "${finalName}" (${studentId}) with ${passedCount} passed/crossed course(s).`);
   };
 
   // Toggle crossed / passed status for a single course on the active student
@@ -424,8 +505,10 @@ export default function App() {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
 
+    const studentProg = normalizeProgramId(activeStudent.program || activeProgram);
+    const progCourses = getAllCourses(studentProg);
     const norm = normalizeCode(courseCode);
-    const courseMeta = ALL_COURSES.find(c => normalizeCode(c.code) === norm);
+    const courseMeta = progCourses.find(c => normalizeCode(c.code) === norm);
     const currentRecord = activeStudent.courseMap[norm];
     const isCurrentlyPassed = currentRecord && currentRecord.isPassed && (currentRecord.points === undefined || currentRecord.points > 0);
 
@@ -473,6 +556,9 @@ export default function App() {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent || !courseCodes || courseCodes.length === 0) return;
 
+    const studentProg = normalizeProgramId(activeStudent.program || activeProgram);
+    const progCourses = getAllCourses(studentProg);
+
     setStudents(prev => {
       return prev.map((s, idx) => {
         if (idx !== activeStudentIndex) return s;
@@ -483,7 +569,7 @@ export default function App() {
         courseCodes.forEach(code => {
           const norm = normalizeCode(code);
           crossedNorms.add(norm);
-          const courseMeta = ALL_COURSES.find(c => normalizeCode(c.code) === norm);
+          const courseMeta = progCourses.find(c => normalizeCode(c.code) === norm);
 
           if (shouldCross) {
             updatedCourseMap[norm] = {
@@ -543,6 +629,9 @@ export default function App() {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
 
+    const studentProg = normalizeProgramId(activeStudent.program || activeProgram);
+    const activePrereqLinks = studentProg === 'EEP' ? eepPrereqLinks : aiPrereqLinks;
+
     const current = activeStudent.selectedCourseCodes || [];
     const norm = normalizeCode(courseCode);
     const exists = current.some(c => normalizeCode(c) === norm);
@@ -550,9 +639,9 @@ export default function App() {
     if (!exists) {
       // 1. Season constraint: Check if course is eligible for student's active registration season (Fall / Spring)
       const activeSeason = getStudentRegistrationSeason(activeStudent);
-      const isEligibleSeason = isCourseEligibleForSeason(courseCode, activeSeason);
+      const isEligibleSeason = isCourseEligibleForSeason(courseCode, activeSeason, studentProg);
       if (!isEligibleSeason) {
-        const courseSeason = getCourseSeason(courseCode);
+        const courseSeason = getCourseSeason(courseCode, studentProg);
         setStatusMessage(`Cannot check ${courseCode}: It is a ${courseSeason} subject, but current registration season is ${activeSeason}. Only ${activeSeason} subjects can be selected.`);
         return;
       }
@@ -565,7 +654,7 @@ export default function App() {
       }
 
       // 3. Verify prerequisites
-      const prereqCheck = checkPrerequisitesMet(courseCode, activeStudent.courseMap, prerequisiteLinks);
+      const prereqCheck = checkPrerequisitesMet(courseCode, activeStudent.courseMap, activePrereqLinks, studentProg);
       if (!prereqCheck.canTake) {
         setStatusMessage(`Cannot check ${courseCode}: You have not passed its prerequisite(s) (${prereqCheck.missingPrereqs.join(', ')}).`);
         return;
@@ -588,6 +677,10 @@ export default function App() {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
 
+    const studentProg = normalizeProgramId(activeStudent.program || activeProgram);
+    const progCourses = getAllCourses(studentProg);
+    const activePrereqLinks = studentProg === 'EEP' ? eepPrereqLinks : aiPrereqLinks;
+
     const activeSeason = getStudentRegistrationSeason(activeStudent);
     const regLimit = getRegistrationLimit(activeStudent);
     let eligibleCount = 0;
@@ -601,7 +694,7 @@ export default function App() {
         const current = s.selectedCourseCodes || [];
         const combined = [...current];
 
-        for (const course of ALL_COURSES) {
+        for (const course of progCourses) {
           const norm = normalizeCode(course.code);
           if (combined.some(c => normalizeCode(c) === norm)) continue;
 
@@ -616,7 +709,7 @@ export default function App() {
           }
           if (record && record.points === 0.00) {
             // Season filter (allows Level 0 BSC 041, PRD 031, PRD 041, CCE 031 in either season)
-            if (!isCourseEligibleForSeason(course.code, activeSeason)) {
+            if (!isCourseEligibleForSeason(course.code, activeSeason, studentProg)) {
               blockedSeasonCount++;
               continue;
             }
@@ -628,7 +721,7 @@ export default function App() {
             }
 
             // Check prerequisites
-            const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
+            const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, activePrereqLinks, studentProg);
             if (prereqCheck.canTake) {
               combined.push(course.code);
               eligibleCount++;
@@ -660,6 +753,10 @@ export default function App() {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent) return;
 
+    const studentProg = normalizeProgramId(activeStudent.program || activeProgram);
+    const progCourses = getAllCourses(studentProg);
+    const activePrereqLinks = studentProg === 'EEP' ? eepPrereqLinks : aiPrereqLinks;
+
     const activeSeason = getStudentRegistrationSeason(activeStudent);
     const regLimit = getRegistrationLimit(activeStudent);
     let eligibleCount = 0;
@@ -673,7 +770,7 @@ export default function App() {
         const current = s.selectedCourseCodes || [];
         const combined = [...current];
 
-        for (const course of ALL_COURSES) {
+        for (const course of progCourses) {
           const norm = normalizeCode(course.code);
           if (combined.some(c => normalizeCode(c) === norm)) continue;
 
@@ -688,7 +785,7 @@ export default function App() {
           }
           if (!record) {
             // Season filter (allows Level 0 BSC 041, PRD 031, PRD 041, CCE 031 in either season)
-            if (!isCourseEligibleForSeason(course.code, activeSeason)) {
+            if (!isCourseEligibleForSeason(course.code, activeSeason, studentProg)) {
               blockedSeasonCount++;
               continue;
             }
@@ -700,7 +797,7 @@ export default function App() {
             }
 
             // Check prerequisites
-            const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
+            const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, activePrereqLinks, studentProg);
             if (prereqCheck.canTake) {
               combined.push(course.code);
               eligibleCount++;
@@ -743,6 +840,9 @@ export default function App() {
     const activeStudent = students[activeStudentIndex];
     if (!activeStudent || !courses || courses.length === 0) return;
 
+    const studentProg = normalizeProgramId(activeStudent.program || activeProgram);
+    const activePrereqLinks = studentProg === 'EEP' ? eepPrereqLinks : aiPrereqLinks;
+
     const activeSeason = getStudentRegistrationSeason(activeStudent);
     const regLimit = getRegistrationLimit(activeStudent);
     let newlySelectedCount = 0;
@@ -762,7 +862,7 @@ export default function App() {
           if (combined.some(c => normalizeCode(c) === norm)) continue;
 
           // Check if course matches active season (or is all-season interchangeable)
-          if (!isCourseEligibleForSeason(course.code, activeSeason)) {
+          if (!isCourseEligibleForSeason(course.code, activeSeason, studentProg)) {
             blockedSeasonCount++;
             continue;
           }
@@ -790,7 +890,7 @@ export default function App() {
           }
 
           // Check prerequisites
-          const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, prerequisiteLinks);
+          const prereqCheck = checkPrerequisitesMet(course.code, s.courseMap, activePrereqLinks, studentProg);
           if (prereqCheck.canTake) {
             combined.push(course.code);
             newlySelectedCount++;
@@ -851,8 +951,90 @@ export default function App() {
     setStatusMessage(`Deselected ${removedCount} course(s) in semester.`);
   };
 
+  // Update or set semester GPA for active student
+  const handleUpdateSemesterGpa = (level, semester, newGpa) => {
+    const activeStudent = students[activeStudentIndex];
+    if (!activeStudent) return;
+
+    const studentProg = normalizeProgramId(activeStudent.program || activeProgram);
+    const isEpp = studentProg === 'EEP';
+    const semGpaCellList = isEpp ? [
+      { level: 0, semester: 1, gpaCell: 'Y10', chCell: 'Z10' },
+      { level: 0, semester: 2, gpaCell: 'Y20', chCell: 'Z20' },
+      { level: 1, semester: 1, gpaCell: 'Y30', chCell: 'Z30' },
+      { level: 1, semester: 2, gpaCell: 'Y40', chCell: 'Z40' },
+      { level: 2, semester: 1, gpaCell: 'Y50', chCell: 'Z50' },
+      { level: 2, semester: 2, gpaCell: 'Y60', chCell: 'Z60' },
+      { level: 3, semester: 1, gpaCell: 'Y70', chCell: 'Z70' },
+      { level: 3, semester: 2, gpaCell: 'Y80', chCell: 'Z80' },
+      { level: 4, semester: 1, gpaCell: 'Y90', chCell: 'Z90' },
+      { level: 4, semester: 2, gpaCell: 'Y100', chCell: 'Z100' },
+    ] : [
+      { level: 0, semester: 1, gpaCell: 'W7', chCell: 'X7' },
+      { level: 0, semester: 2, gpaCell: 'W11', chCell: 'X11' },
+      { level: 1, semester: 1, gpaCell: 'W16', chCell: 'X16' },
+      { level: 1, semester: 2, gpaCell: 'W20', chCell: 'X20' },
+      { level: 2, semester: 1, gpaCell: 'W25', chCell: 'X25' },
+      { level: 2, semester: 2, gpaCell: 'W30', chCell: 'X30' },
+      { level: 3, semester: 1, gpaCell: 'W34', chCell: 'X34' },
+      { level: 3, semester: 2, gpaCell: 'W38', chCell: 'X38' },
+      { level: 4, semester: 1, gpaCell: 'W43', chCell: 'X43' },
+      { level: 4, semester: 2, gpaCell: 'W47', chCell: 'X47' },
+    ];
+
+    const slot = semGpaCellList.find(s => s.level === level && s.semester === semester);
+    const targetCell = slot ? slot.gpaCell : null;
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== activeStudentIndex) return s;
+
+        const currentGpas = [...(s.levelGpas || [])];
+        const existingIdx = currentGpas.findIndex(lg => lg.level === level && lg.semester === semester);
+
+        if (newGpa === null || newGpa === undefined || newGpa === '' || isNaN(newGpa)) {
+          if (existingIdx >= 0) {
+            currentGpas.splice(existingIdx, 1);
+          }
+        } else {
+          const parsed = parseFloat(newGpa);
+          const gpaRecord = {
+            level,
+            semester,
+            gpa: parsed,
+            gpaCell: targetCell
+          };
+          if (existingIdx >= 0) {
+            currentGpas[existingIdx] = { ...currentGpas[existingIdx], ...gpaRecord };
+          } else {
+            currentGpas.push(gpaRecord);
+          }
+        }
+
+        currentGpas.sort((a, b) => (a.level - b.level) || (a.semester - b.semester));
+        const latestSemGpa = currentGpas.length > 0 ? currentGpas[currentGpas.length - 1].gpa : s.latestSemesterGpa;
+
+        return {
+          ...s,
+          levelGpas: currentGpas,
+          latestSemesterGpa: latestSemGpa
+        };
+      });
+    });
+
+    const semLabel = semester === 1 ? 'Fall' : 'Spring';
+    setStatusMessage(`Updated Level ${level} ${semLabel} GPA (${targetCell}) to ${newGpa !== '' && newGpa !== null && !isNaN(newGpa) ? parseFloat(newGpa).toFixed(2) : 'Cleared'}.`);
+  };
+
   const handleExport = async (options, mode = 'multi') => {
-    if (!templateBuffer || students.length === 0) {
+    const activeStudentProg = normalizeProgramId(activeStudent?.program || activeProgram);
+    const hasEep = students.some(s => normalizeProgramId(s.program) === 'EEP');
+    const targetProg = (students.length > 0 && hasEep && !students.some(s => normalizeProgramId(s.program) === 'AI'))
+      ? 'EEP'
+      : activeStudentProg;
+    const templateBufferToUse = customTemplateBuffer || (targetProg === 'EEP' ? eepTemplateBuffer : aiTemplateBuffer);
+
+    if (!templateBufferToUse || students.length === 0) {
       alert('Please upload transcripts and ensure the Excel template is loaded.');
       return;
     }
@@ -866,17 +1048,18 @@ export default function App() {
     try {
       let outputBuffer;
       let fileName;
+      const progTag = targetProg === 'EEP' ? 'EEP_' : '';
 
       if (mode === 'single') {
-        outputBuffer = await generateSingleSheetCombinedWorkbook(templateBuffer, students, options);
+        outputBuffer = await generateSingleSheetCombinedWorkbook(templateBufferToUse, students, options);
         fileName = students.length === 1
-          ? `${getSafeSingleStudentName()}_Single_Sheet.xlsx`
-          : `Degree_Sheets_All_${students.length}_Students_Single_Sheet.xlsx`;
+          ? `${getSafeSingleStudentName()}_${progTag}Single_Sheet.xlsx`
+          : `Degree_Sheets_All_${students.length}_Students_${progTag}Single_Sheet.xlsx`;
       } else {
-        outputBuffer = await generatePreservedExcelWorkbook(templateBuffer, students, options);
+        outputBuffer = await generatePreservedExcelWorkbook(templateBufferToUse, students, options);
         fileName = students.length === 1
-          ? `${getSafeSingleStudentName()}_Crossed_Degree.xlsx`
-          : `Degree_Sheets_All_${students.length}_Students_Multi_Tab.xlsx`;
+          ? `${getSafeSingleStudentName()}_${progTag}Crossed_Degree.xlsx`
+          : `Degree_Sheets_All_${students.length}_Students_${progTag}Multi_Tab.xlsx`;
       }
       
       // Download in browser using Blob
@@ -925,16 +1108,18 @@ export default function App() {
         return raw.replace(/[\/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim();
       };
 
+      const combinedPrereqLinks = [...aiPrereqLinks, ...eepPrereqLinks];
+
       if (mode === 'single') {
         outputBuffer = await generateSingleSheetRegistrationWorkbook(regTemplateBuffer, students, {
-          prerequisiteLinks
+          prerequisiteLinks: combinedPrereqLinks
         });
         fileName = students.length === 1
           ? `${getSafeSingleStudentName()}_Registration_Form_Single_Sheet.xlsx`
           : `Registration_Forms_All_${students.length}_Students_Single_Sheet.xlsx`;
       } else {
         outputBuffer = await generateRegistrationWorkbook(regTemplateBuffer, students, {
-          prerequisiteLinks
+          prerequisiteLinks: combinedPrereqLinks
         });
         fileName = students.length === 1
           ? `${getSafeSingleStudentName()}_Registration_Form.xlsx`
@@ -964,7 +1149,14 @@ export default function App() {
 
   // Export Combined Degree Tree & Registration Form on the SAME sheet for each student with page break
   const handleExportCombinedTreeAndReg = async (options = {}) => {
-    if (!templateBuffer || students.length === 0) {
+    const activeStudentProg = normalizeProgramId(activeStudent?.program || activeProgram);
+    const hasEep = students.some(s => normalizeProgramId(s.program) === 'EEP');
+    const targetProg = (students.length > 0 && hasEep && !students.some(s => normalizeProgramId(s.program) === 'AI'))
+      ? 'EEP'
+      : activeStudentProg;
+    const templateBufferToUse = customTemplateBuffer || (targetProg === 'EEP' ? eepTemplateBuffer : aiTemplateBuffer);
+
+    if (!templateBufferToUse || students.length === 0) {
       alert('Please upload transcript PDFs and ensure the Excel template is loaded.');
       return;
     }
@@ -979,13 +1171,15 @@ export default function App() {
       }
       const regTemplateBuffer = await res.arrayBuffer();
 
+      const combinedPrereqLinks = [...aiPrereqLinks, ...eepPrereqLinks];
+
       const outputBuffer = await generateCombinedTreeAndRegistrationWorkbook(
-        templateBuffer,
+        templateBufferToUse,
         regTemplateBuffer,
         students,
         {
           ...options,
-          prerequisiteLinks
+          prerequisiteLinks: combinedPrereqLinks
         }
       );
 
@@ -994,9 +1188,10 @@ export default function App() {
         return raw.replace(/[\/\\:*?"<>|]/g, '_').replace(/\s+/g, '_').trim();
       };
 
+      const progTag = targetProg === 'EEP' ? 'EEP_' : '';
       const fileName = students.length === 1
-        ? `${getSafeSingleStudentName()}_Tree_And_Registration.xlsx`
-        : `Degree_Tree_And_Registration_All_${students.length}_Students.xlsx`;
+        ? `${getSafeSingleStudentName()}_${progTag}Tree_And_Registration.xlsx`
+        : `Degree_Tree_And_Registration_All_${students.length}_Students_${progTag}.xlsx`;
 
       const blob = new Blob([outputBuffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -1021,6 +1216,10 @@ export default function App() {
   };
 
   const activeStudent = students[activeStudentIndex] || students[0];
+  const activeStudentProg = normalizeProgramId(activeStudent?.program || activeProgram);
+  const activePrereqLinks = activeStudentProg === 'EEP' ? eepPrereqLinks : aiPrereqLinks;
+  const currentTemplateBuffer = customTemplateBuffer || (activeProgram === 'EEP' ? eepTemplateBuffer : aiTemplateBuffer);
+  const currentTemplateName = customTemplateName || (activeProgram === 'EEP' ? 'EPP Template.xlsx' : 'template.xlsx');
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -1031,27 +1230,84 @@ export default function App() {
             width: '42px',
             height: '42px',
             borderRadius: '12px',
-            background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+            background: activeProgram === 'EEP'
+              ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
+              : 'linear-gradient(135deg, #6366f1, #06b6d4)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#fff',
-            boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)'
+            boxShadow: activeProgram === 'EEP'
+              ? '0 4px 12px rgba(245, 158, 11, 0.35)'
+              : '0 4px 12px rgba(99, 102, 241, 0.35)'
           }}>
-            <GraduationCap size={24} />
+            {activeProgram === 'EEP' ? <Zap size={24} /> : <GraduationCap size={24} />}
           </div>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
                 Transcript Degree Crosser
               </span>
-              <span className="brand-badge">
-                AI Curriculum
-              </span>
+
+              {/* Program Selector Segmented Control */}
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: 'rgba(255, 255, 255, 0.06)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '2px',
+                gap: '2px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveProgram('AI')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.25rem 0.65rem',
+                    borderRadius: '6px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    background: activeProgram === 'AI' ? 'linear-gradient(135deg, #6366f1, #06b6d4)' : 'transparent',
+                    color: activeProgram === 'AI' ? '#fff' : 'var(--text-muted)'
+                  }}
+                  title="Switch active program track to Artificial Intelligence (AI)"
+                >
+                  <span>🤖</span>
+                  <span>AI Track</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveProgram('EEP')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem',
+                    padding: '0.25rem 0.65rem',
+                    borderRadius: '6px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    background: activeProgram === 'EEP' ? 'linear-gradient(135deg, #f59e0b, #ef4444)' : 'transparent',
+                    color: activeProgram === 'EEP' ? '#fff' : 'var(--text-muted)'
+                  }}
+                  title="Switch active program track to Energy and Electrical Power (EEP)"
+                >
+                  <span>⚡</span>
+                  <span>EEP Program</span>
+                </button>
+              </div>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-              Pass &gt; 0.00 = Crossed Out • 0.00 = Active / Uncrossed
+              Pass &gt; 0.00 = Crossed Out • 0.00 = Active / Uncrossed • {activeProgram === 'EEP' ? 'EEP Curriculum (Level 0–4)' : 'AI Curriculum (Level 0–4)'}
             </p>
           </div>
         </div>
@@ -1069,7 +1325,9 @@ export default function App() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.45rem',
-              background: 'linear-gradient(135deg, #6366f1, #06b6d4)'
+              background: activeProgram === 'EEP'
+                ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
+                : 'linear-gradient(135deg, #6366f1, #06b6d4)'
             }}
           >
             <UserPlus size={16} />
@@ -1116,14 +1374,16 @@ export default function App() {
       <main style={{ flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%', padding: '2rem 1.5rem' }}>
         {/* Upload Section */}
         <UploadZone
+          activeProgram={activeProgram}
+          onSelectProgram={setActiveProgram}
           onPdfsLoaded={handlePdfsLoaded}
           onTemplateLoaded={handleTemplateLoaded}
           onRosterLoaded={handleRosterLoaded}
           onExportedDegreeLoaded={handleExportedDegreeWorkbookLoaded}
           onBackupLoaded={handleBackupLoaded}
           onOpenAddStudent={() => setIsAddStudentModalOpen(true)}
-          hasTemplate={!!templateBuffer}
-          templateName={templateName}
+          hasTemplate={!!currentTemplateBuffer}
+          templateName={currentTemplateName}
           rosterInfo={rosterInfo}
           isLoading={isLoading}
         />
@@ -1178,7 +1438,7 @@ export default function App() {
             {/* Interactive Degree Curriculum Grid */}
             <DegreeGrid
               student={activeStudent}
-              prerequisiteLinks={prerequisiteLinks}
+              prerequisiteLinks={activePrereqLinks}
               onOpenPrereqModal={handleOpenPrereqModal}
               onSavePrerequisites={handleSavePrerequisites}
               onResetPrerequisites={handleResetPrerequisites}
@@ -1190,6 +1450,7 @@ export default function App() {
               onClearSelected={handleClearSelected}
               onSelectSemesterCourses={handleSelectSemesterCourses}
               onDeselectSemesterCourses={handleDeselectSemesterCourses}
+              onUpdateSemesterGpa={handleUpdateSemesterGpa}
             />
           </>
         )}
@@ -1223,7 +1484,9 @@ export default function App() {
                 style={{
                   fontSize: '0.9rem',
                   padding: '0.6rem 1.4rem',
-                  background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                  background: activeProgram === 'EEP'
+                    ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
+                    : 'linear-gradient(135deg, #6366f1, #06b6d4)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.5rem'
@@ -1246,7 +1509,7 @@ export default function App() {
         color: 'var(--text-muted)',
         background: 'var(--bg-card)'
       }}>
-        East Port Said National University • Faculty of Engineering • Artificial Intelligence Degree Advising
+        East Port Said National University • Faculty of Engineering • AI Track &amp; Energy and Electrical Power (EEP) Degree Advising
       </footer>
 
       {/* Prerequisite Editor Modal */}
@@ -1254,10 +1517,11 @@ export default function App() {
         isOpen={isPrereqModalOpen}
         onClose={() => setIsPrereqModalOpen(false)}
         initialCourseCode={initialPrereqModalCourse}
-        prerequisiteLinks={prerequisiteLinks}
+        prerequisiteLinks={activePrereqLinks}
         onSavePrerequisites={handleSavePrerequisites}
         onMakeDefault={handleMakeDefaultPrerequisites}
         onResetPrerequisites={handleResetPrerequisites}
+        activeProgram={activeStudentProg}
       />
 
       {/* Add Student Modal */}
@@ -1265,6 +1529,7 @@ export default function App() {
         isOpen={isAddStudentModalOpen}
         onClose={() => setIsAddStudentModalOpen(false)}
         onAddStudent={handleAddStudent}
+        initialProgram={activeProgram}
       />
 
       {/* Cross Subjects Modal (Direct Access from Student Header) */}

@@ -1,7 +1,10 @@
-// Course definition and Excel grid coordinates for Book2.xlsx
-// Each course corresponds to a Code cell (e.g. C7), Credit cell (D7), and Title cell (C8:D9 merged)
+// Course definitions, degree structures, and Excel grid coordinates for both
+// Artificial Intelligence (AI) and Energy & Electrical Power (EEP) Programs.
 
-export const DEGREE_STRUCTURE = [
+// ==========================================
+// 1. AI PROGRAM DEGREE STRUCTURE & PREREQS
+// ==========================================
+export const AI_DEGREE_STRUCTURE = [
   {
     level: 0,
     title: 'LEVEL 0',
@@ -119,8 +122,8 @@ export const DEGREE_STRUCTURE = [
           { code: 'CCE 321', name: 'Embedded Systems', ch: 3, codeCell: 'F34', chCell: 'G34', titleCell: 'F35', mergeRange: 'F35:G36' },
           { code: 'CCE 351', name: 'Computer Networks', ch: 2, codeCell: 'I34', chCell: 'J34', titleCell: 'I35', mergeRange: 'I35:J36' },
           { code: 'CCE 312', name: 'Parallel Processing', ch: 3, codeCell: 'L34', chCell: 'M34', titleCell: 'L35', mergeRange: 'L35:M36' },
-          { code: 'EPM 3EX', name: 'Elective Course (1)', ch: 2, codeCell: 'O34', chCell: 'P34', titleCell: 'O35', mergeRange: 'O35:P36' },
-          { code: 'GFR 3E1', name: 'Elective Faculty (1)', ch: 2, codeCell: 'R34', chCell: 'S34', titleCell: 'R35', mergeRange: 'R35:S36' },
+          { code: 'EPM 3EX', name: 'Elective Course (1)', ch: 2, codeCell: 'O34', chCell: 'P34', titleCell: 'O35', mergeRange: 'O35:P36', aliases: ['EPM3EX'] },
+          { code: 'GFR 3E1', name: 'Elective Faculty (1)', ch: 2, codeCell: 'R34', chCell: 'S34', titleCell: 'R35', mergeRange: 'R35:S36', aliases: ['GFR3E1'] },
           { code: 'GFR 3XX', name: 'Summer Training (2)', ch: 1, codeCell: 'U34', chCell: 'V34', titleCell: 'U35', mergeRange: 'U35:V36' },
         ]
       },
@@ -134,8 +137,8 @@ export const DEGREE_STRUCTURE = [
           { code: 'CCE 331', name: 'Deep Learning', ch: 3, codeCell: 'F38', chCell: 'G38', titleCell: 'F39', mergeRange: 'F39:G40' },
           { code: 'CCE 332', name: 'Image Processing & Computer Vision', ch: 3, codeCell: 'I38', chCell: 'J38', titleCell: 'I39', mergeRange: 'I39:J40' },
           { code: 'CCE 333', name: 'GPU Architecture & Programming', ch: 3, codeCell: 'L38', chCell: 'M38', titleCell: 'L39', mergeRange: 'L39:M40' },
-          { code: 'CCE 3EX', name: 'Elective Course (2)', ch: 2, codeCell: 'O38', chCell: 'P38', titleCell: 'O39', mergeRange: 'O39:P40' },
-          { code: 'GFR 3EX', name: 'Elective Faculty (2)', ch: 2, codeCell: 'R38', chCell: 'S38', titleCell: 'R39', mergeRange: 'R39:S40' },
+          { code: 'CCE 3EX', name: 'Elective Course (2)', ch: 2, codeCell: 'O38', chCell: 'P38', titleCell: 'O39', mergeRange: 'O39:P40', aliases: ['CCE3EX'] },
+          { code: 'GFR 3EX', name: 'Elective Faculty (2)', ch: 2, codeCell: 'R38', chCell: 'S38', titleCell: 'R39', mergeRange: 'R39:S40', aliases: ['GFR3EX'] },
         ]
       }
     ]
@@ -153,8 +156,8 @@ export const DEGREE_STRUCTURE = [
           { code: 'CCE 431', name: 'Robotics Design', ch: 3, codeCell: 'C43', chCell: 'D43', titleCell: 'C44', mergeRange: 'C44:D45' },
           { code: 'CCE 432', name: 'Meta-Heuristic Algorithms', ch: 3, codeCell: 'F43', chCell: 'G43', titleCell: 'F44', mergeRange: 'F44:G45' },
           { code: 'CCE 433', name: 'Graduation Project 1', ch: 4, codeCell: 'I43', chCell: 'J43', titleCell: 'I44', mergeRange: 'I44:J45' },
-          { code: 'CCE 4EX-1', name: 'Elective Course (3)', ch: 3, codeCell: 'L43', chCell: 'M43', titleCell: 'L44', mergeRange: 'L44:M45', rawCode: 'CCE 4EX' },
-          { code: 'CCE 4EX-2', name: 'Elective Course (4)', ch: 3, codeCell: 'O43', chCell: 'P43', titleCell: 'O44', mergeRange: 'O44:P45', rawCode: 'CCE 4EX' },
+          { code: 'CCE 4EX-1', name: 'Elective Course (3)', ch: 3, codeCell: 'L43', chCell: 'M43', titleCell: 'L44', mergeRange: 'L44:M45', rawCode: 'CCE 4EX', aliases: ['CCE4EX', 'CCE 4EX-1'] },
+          { code: 'CCE 4EX-2', name: 'Elective Course (4)', ch: 3, codeCell: 'O43', chCell: 'P43', titleCell: 'O44', mergeRange: 'O44:P45', rawCode: 'CCE 4EX', aliases: ['CCE4EX', 'CCE 4EX-2'] },
         ]
       },
       {
@@ -166,16 +169,15 @@ export const DEGREE_STRUCTURE = [
           { code: 'CCE 434', name: 'Modeling & Simulation', ch: 3, codeCell: 'C47', chCell: 'D47', titleCell: 'C48', mergeRange: 'C48:D49' },
           { code: 'CCE 435', name: 'Data Mining', ch: 3, codeCell: 'F47', chCell: 'G47', titleCell: 'F48', mergeRange: 'F48:G49' },
           { code: 'CCE 436', name: 'Graduation Project 2', ch: 4, codeCell: 'I47', chCell: 'J47', titleCell: 'I48', mergeRange: 'I48:J49' },
-          { code: 'CCE 4EX-3', name: 'Elective Course (5)', ch: 3, codeCell: 'L47', chCell: 'M47', titleCell: 'L48', mergeRange: 'L48:M49', rawCode: 'CCE 4EX' },
-          { code: 'CCE 4EX-4', name: 'Elective Course (6)', ch: 3, codeCell: 'O47', chCell: 'P47', titleCell: 'O48', mergeRange: 'O48:P49', rawCode: 'CCE 4EX' },
+          { code: 'CCE 4EX-3', name: 'Elective Course (5)', ch: 3, codeCell: 'L47', chCell: 'M47', titleCell: 'L48', mergeRange: 'L48:M49', rawCode: 'CCE 4EX', aliases: ['CCE4EX', 'CCE 4EX-3'] },
+          { code: 'CCE 4EX-4', name: 'Elective Course (6)', ch: 3, codeCell: 'O47', chCell: 'P47', titleCell: 'O48', mergeRange: 'O48:P49', rawCode: 'CCE 4EX', aliases: ['CCE4EX', 'CCE 4EX-4'] },
         ]
       }
     ]
   }
 ];
 
-// Prerequisite links (arrows connecting subjects in the curriculum flow diagram)
-export const PREREQUISITE_LINKS = [
+export const AI_PREREQUISITE_LINKS = [
   { from: 'BSC 011', to: 'BSC 012' },
   { from: 'BSC 012', to: 'BSC 111' },
   { from: 'BSC 012', to: 'BSC 112' },
@@ -201,19 +203,388 @@ export const PREREQUISITE_LINKS = [
   { from: 'CCE 433', to: 'CCE 436' }
 ];
 
-// Helper to normalize course code (e.g., 'GUR 0C1' -> 'GUR0C1', 'BSC 011' -> 'BSC011')
+// ==========================================
+// 2. EEP PROGRAM DEGREE STRUCTURE & PREREQS
+// ==========================================
+export const EEP_DEGREE_STRUCTURE = [
+  {
+    level: 0,
+    title: 'LEVEL 0',
+    semesters: [
+      {
+        semester: 1,
+        title: 'Fall Semester',
+        gpaCell: 'Y10',
+        chCell: 'Z10',
+        courses: [
+          { code: 'BSC 011', name: 'Mathematics I', ch: 3, codeCell: 'D10', chCell: 'E10', titleCell: 'D11', mergeRange: 'D11:E11' },
+          { code: 'BSC 031', name: 'Physics I', ch: 3, codeCell: 'G10', chCell: 'H10', titleCell: 'G11', mergeRange: 'G11:H11' },
+          { code: 'BSC 021', name: 'Mechanics I', ch: 3, codeCell: 'J10', chCell: 'K10', titleCell: 'J11', mergeRange: 'J11:K11' },
+          { code: 'BSC 041', name: 'Chemical Engineering', ch: 3, codeCell: 'M10', chCell: 'N10', titleCell: 'M11', mergeRange: 'M11:N11' },
+          { code: 'PRD 031', name: 'Engineering Drawing and Projection', ch: 3, codeCell: 'P10', chCell: 'Q10', titleCell: 'P11', mergeRange: 'P11:Q11' },
+          { code: 'GUR 0C1', name: 'University Requirement (1)', ch: 1, codeCell: 'S10', chCell: 'T10', titleCell: 'S11', mergeRange: 'S11:T11', aliases: ['GUR0C1'] },
+        ]
+      },
+      {
+        semester: 2,
+        title: 'Spring Semester',
+        gpaCell: 'Y20',
+        chCell: 'Z20',
+        courses: [
+          { code: 'BSC 012', name: 'Mathematics II', ch: 3, codeCell: 'D20', chCell: 'E20', titleCell: 'D21', mergeRange: 'D21:E21' },
+          { code: 'BSC 032', name: 'Physics II', ch: 3, codeCell: 'G20', chCell: 'H20', titleCell: 'G21', mergeRange: 'G21:H21' },
+          { code: 'BSC 022', name: 'Mechanics II', ch: 3, codeCell: 'J20', chCell: 'K20', titleCell: 'J21', mergeRange: 'J21:K21' },
+          { code: 'PRD 041', name: 'Production Technology', ch: 3, codeCell: 'M20', chCell: 'N20', titleCell: 'M21', mergeRange: 'M21:N21' },
+          { code: 'CCE 031', name: 'Introduction to Computer Science', ch: 3, codeCell: 'P20', chCell: 'Q20', titleCell: 'P21', mergeRange: 'P21:Q21' },
+          { code: 'GUR 0C2', name: 'University Requirement (2)', ch: 2, codeCell: 'S20', chCell: 'T20', titleCell: 'S21', mergeRange: 'S21:T21', aliases: ['GUR0C2'] },
+        ]
+      }
+    ]
+  },
+  {
+    level: 1,
+    title: 'LEVEL 1',
+    semesters: [
+      {
+        semester: 1,
+        title: 'Fall Semester',
+        gpaCell: 'Y30',
+        chCell: 'Z30',
+        courses: [
+          { code: 'MPE 122', name: 'Thermodynamics', ch: 3, codeCell: 'D30', chCell: 'E30', titleCell: 'D31', mergeRange: 'D31:E31' },
+          { code: 'MPE 112', name: 'Fluid Mechanics', ch: 3, codeCell: 'G30', chCell: 'H30', titleCell: 'G31', mergeRange: 'G31:H31' },
+          { code: 'EPM 111', name: 'Electrical Circuits', ch: 3, codeCell: 'J30', chCell: 'K30', titleCell: 'J31', mergeRange: 'J31:K31' },
+          { code: 'CCE 121', name: 'Logic Circuits', ch: 3, codeCell: 'M30', chCell: 'N30', titleCell: 'M31', mergeRange: 'M31:N31' },
+          { code: 'BSC 111', name: 'Mathematics III', ch: 3, codeCell: 'P30', chCell: 'Q30', titleCell: 'P31', mergeRange: 'P31:Q31' },
+          { code: 'GUR 1C1', name: 'University Requirement (3)', ch: 2, codeCell: 'S30', chCell: 'T30', titleCell: 'S31', mergeRange: 'S31:T31', aliases: ['GUR1C1'] },
+        ]
+      },
+      {
+        semester: 2,
+        title: 'Spring Semester',
+        gpaCell: 'Y40',
+        chCell: 'Z40',
+        courses: [
+          { code: 'BSC 112', name: 'Statistics & Numerical Analysis', ch: 3, codeCell: 'D40', chCell: 'E40', titleCell: 'D41', mergeRange: 'D41:E41' },
+          { code: 'MPE 131', name: 'Energy Resources', ch: 3, codeCell: 'G40', chCell: 'H40', titleCell: 'G41', mergeRange: 'G41:H41' },
+          { code: 'MPE 123', name: 'Heat Transfer', ch: 3, codeCell: 'J40', chCell: 'K40', titleCell: 'J41', mergeRange: 'J41:K41' },
+          { code: 'EPM 112', name: 'Fundamentals of Electromagnetic Fields', ch: 3, codeCell: 'M40', chCell: 'N40', titleCell: 'M41', mergeRange: 'M41:N41' },
+          { code: 'PRD 133', name: 'Machine Design', ch: 3, codeCell: 'P40', chCell: 'Q40', titleCell: 'P41', mergeRange: 'P41:Q41' },
+          { code: 'GUR 1C2', name: 'University Requirement (4)', ch: 2, codeCell: 'S40', chCell: 'T40', titleCell: 'S41', mergeRange: 'S41:T41', aliases: ['GUR1C2'] },
+        ]
+      }
+    ]
+  },
+  {
+    level: 2,
+    title: 'LEVEL 2',
+    semesters: [
+      {
+        semester: 1,
+        title: 'Fall Semester',
+        gpaCell: 'Y50',
+        chCell: 'Z50',
+        courses: [
+          { code: 'MPE 231', name: 'Renewable Energy Systems', ch: 3, codeCell: 'D50', chCell: 'E50', titleCell: 'D51', mergeRange: 'D51:E51' },
+          { code: 'MPE 241', name: 'Combustion', ch: 3, codeCell: 'G50', chCell: 'H50', titleCell: 'G51', mergeRange: 'G51:H51' },
+          { code: 'EPM 221', name: 'Electrical Machines (1)', ch: 3, codeCell: 'J50', chCell: 'K50', titleCell: 'J51', mergeRange: 'J51:K51' },
+          { code: 'EPM 241', name: 'Industrial Electronics', ch: 3, codeCell: 'M50', chCell: 'N50', titleCell: 'M51', mergeRange: 'M51:N51' },
+          { code: 'GUR 2C1', name: 'University Requirement (5)', ch: 2, codeCell: 'P50', chCell: 'Q50', titleCell: 'P51', mergeRange: 'P51:Q51', aliases: ['GUR2C1'] },
+          { code: 'GUR 2E1', name: 'Elective University (1)', ch: 2, codeCell: 'S50', chCell: 'T50', titleCell: 'S51', mergeRange: 'S51:T51', aliases: ['GUR2E1'] },
+          { code: 'GFR 2XX', name: 'Summer Training (1)', ch: 1, codeCell: 'V50', chCell: 'W50', titleCell: 'V51', mergeRange: 'V51:W51' },
+        ]
+      },
+      {
+        semester: 2,
+        title: 'Spring Semester',
+        gpaCell: 'Y60',
+        chCell: 'Z60',
+        courses: [
+          { code: 'MPE 232', name: 'Energy Storage Systems', ch: 3, codeCell: 'D60', chCell: 'E60', titleCell: 'D61', mergeRange: 'D61:E61' },
+          { code: 'EPM 231', name: 'Electrical Power Engineering (1)', ch: 3, codeCell: 'G60', chCell: 'H60', titleCell: 'G61', mergeRange: 'G61:H61' },
+          { code: 'EPM 222', name: 'Electrical Machines (2)', ch: 3, codeCell: 'J60', chCell: 'K60', titleCell: 'J61', mergeRange: 'J61:K61' },
+          { code: 'MPE 251', name: 'Automatic Control Systems', ch: 3, codeCell: 'M60', chCell: 'N60', titleCell: 'M61', mergeRange: 'M61:N61' },
+          { code: 'MPE 252', name: 'Measurement and instrumentation', ch: 2, codeCell: 'P60', chCell: 'Q60', titleCell: 'P61', mergeRange: 'P61:Q61' },
+          { code: 'GUR 2E2', name: 'Elective University (2)', ch: 2, codeCell: 'S60', chCell: 'T60', titleCell: 'S61', mergeRange: 'S61:T61', aliases: ['GUR2E2'] },
+        ]
+      }
+    ]
+  },
+  {
+    level: 3,
+    title: 'LEVEL 3',
+    semesters: [
+      {
+        semester: 1,
+        title: 'Fall Semester',
+        gpaCell: 'Y70',
+        chCell: 'Z70',
+        courses: [
+          { code: 'MPE 341', name: 'Internal Combustion Engines', ch: 3, codeCell: 'D70', chCell: 'E70', titleCell: 'D71', mergeRange: 'D71:E71' },
+          { code: 'MPE 311', name: 'Incompressible Flow Machines', ch: 3, codeCell: 'G70', chCell: 'H70', titleCell: 'G71', mergeRange: 'G71:H71' },
+          { code: 'EPM 341', name: 'Power Electronics (1)', ch: 3, codeCell: 'J70', chCell: 'K70', titleCell: 'J71', mergeRange: 'J71:K71' },
+          { code: 'EPM 331', name: 'Electrical Power Engineering (2)', ch: 3, codeCell: 'M70', chCell: 'N70', titleCell: 'M71', mergeRange: 'M71:N71' },
+          { code: 'MPE 3EX', name: 'Elective Course (1)', ch: 2, codeCell: 'P70', chCell: 'Q70', titleCell: 'P71', mergeRange: 'P71:Q71', aliases: ['MPE3EX'] },
+          { code: 'GFR 3EX', name: 'Elective Faculty (1)', ch: 2, codeCell: 'S70', chCell: 'T70', titleCell: 'S71', mergeRange: 'S71:T71', aliases: ['GFR3EX'] },
+          { code: 'GFR 3XX', name: 'Summer Training (2)', ch: 1, codeCell: 'V70', chCell: 'W70', titleCell: 'V71', mergeRange: 'V71:W71' },
+        ]
+      },
+      {
+        semester: 2,
+        title: 'Spring Semester',
+        gpaCell: 'Y80',
+        chCell: 'Z80',
+        courses: [
+          { code: 'MPE 351', name: 'Thermal Process Engineering', ch: 3, codeCell: 'D80', chCell: 'E80', titleCell: 'D81', mergeRange: 'D81:E81' },
+          { code: 'MPE 312', name: 'Compressible Flow Machines', ch: 3, codeCell: 'G80', chCell: 'H80', titleCell: 'G81', mergeRange: 'G81:H81' },
+          { code: 'EPM 342', name: 'Power Electronics (2)', ch: 3, codeCell: 'J80', chCell: 'K80', titleCell: 'J81', mergeRange: 'J81:K81' },
+          { code: 'EPM 351', name: 'Power System Protection', ch: 3, codeCell: 'M80', chCell: 'N80', titleCell: 'M81', mergeRange: 'M81:N81' },
+          { code: 'EPM 3EX', name: 'Elective Course (2)', ch: 3, codeCell: 'P80', chCell: 'Q80', titleCell: 'P81', mergeRange: 'P81:Q81', aliases: ['EPM3EX'] },
+          { code: 'CCE 3EX', name: 'Elective Faculty (2)', ch: 2, codeCell: 'S80', chCell: 'T80', titleCell: 'S81', mergeRange: 'S81:T81', aliases: ['CCE3EX'] },
+        ]
+      }
+    ]
+  },
+  {
+    level: 4,
+    title: 'LEVEL 4',
+    semesters: [
+      {
+        semester: 1,
+        title: 'Fall Semester',
+        gpaCell: 'Y90',
+        chCell: 'Z90',
+        courses: [
+          { code: 'MPE 411', name: 'Graduation Project 1', ch: 3, codeCell: 'D90', chCell: 'E90', titleCell: 'D91', mergeRange: 'D91:E91' },
+          { code: 'EPM 411', name: 'Photovoltaic Systems', ch: 2, codeCell: 'G90', chCell: 'H90', titleCell: 'G91', mergeRange: 'G91:H91' },
+          { code: 'EPM 412', name: 'Electrical Distribution Systems Installations', ch: 3, codeCell: 'J90', chCell: 'K90', titleCell: 'J91', mergeRange: 'J91:K91' },
+          { code: 'MPE 451', name: 'Economics of Energy', ch: 2, codeCell: 'M90', chCell: 'N90', titleCell: 'M91', mergeRange: 'M91:N91' },
+          { code: 'MPE 4EX-3', name: 'Elective Course (3)', ch: 3, codeCell: 'P90', chCell: 'Q90', titleCell: 'P91', mergeRange: 'P91:Q91', rawCode: 'MPE 4EX', aliases: ['MPE4EX', 'MPE 4EX-3'] },
+          { code: 'MPE 4EX-4', name: 'Elective Course (4)', ch: 3, codeCell: 'S90', chCell: 'T90', titleCell: 'S91', mergeRange: 'S91:T91', rawCode: 'MPE 411', aliases: ['MPE411', 'MPE 4EX', 'MPE 4EX-4'] },
+        ]
+      },
+      {
+        semester: 2,
+        title: 'Spring Semester',
+        gpaCell: 'Y100',
+        chCell: 'Z100',
+        courses: [
+          { code: 'MPE 452', name: 'Thermal Power Plants', ch: 3, codeCell: 'D100', chCell: 'E100', titleCell: 'D101', mergeRange: 'D101:E101' },
+          { code: 'EPM 431', name: 'Grid Integration of Renewable Energy', ch: 2, codeCell: 'G100', chCell: 'H100', titleCell: 'G101', mergeRange: 'G101:H101' },
+          { code: 'MPE 412', name: 'Graduation Project 2', ch: 3, codeCell: 'J100', chCell: 'K100', titleCell: 'J101', mergeRange: 'J101:K101' },
+          { code: 'EPM 4EX-5', name: 'Elective Course (5)', ch: 3, codeCell: 'M100', chCell: 'N100', titleCell: 'M101', mergeRange: 'M101:N101', rawCode: 'EPM 431', aliases: ['EPM431', 'EPM 4EX', 'EPM 4EX-5'] },
+          { code: 'EPM 4EX-6', name: 'Elective Course (6)', ch: 3, codeCell: 'P100', chCell: 'Q100', titleCell: 'P101', mergeRange: 'P101:Q101', rawCode: 'EPM 431', aliases: ['EPM431', 'EPM 4EX', 'EPM 4EX-6'] },
+        ]
+      }
+    ]
+  }
+];
+
+export const EPP_PREREQUISITE_LINKS = [
+  { from: 'BSC 011', to: 'BSC 012' },
+  { from: 'BSC 031', to: 'BSC 032' },
+  { from: 'BSC 021', to: 'BSC 022' },
+  { from: 'BSC 012', to: 'BSC 111' },
+  { from: 'BSC 012', to: 'MPE 122' },
+  { from: 'BSC 022', to: 'EPM 111' },
+  { from: 'BSC 022', to: 'MPE 112' },
+  { from: 'BSC 111', to: 'PRD 133' },
+  { from: 'BSC 111', to: 'EPM 241' },
+  { from: 'BSC 112', to: 'MPE 231' },
+  { from: 'EPM 111', to: 'MPE 123' },
+  { from: 'EPM 111', to: 'EPM 221' },
+  { from: 'MPE 123', to: 'EPM 221' },
+  { from: 'MPE 122', to: 'MPE 241' },
+  { from: 'MPE 112', to: 'MPE 311' },
+  { from: 'MPE 112', to: 'EPM 331' },
+  { from: 'MPE 231', to: 'MPE 232' },
+  { from: 'MPE 232', to: 'EPM 231' },
+  { from: 'MPE 232', to: 'MPE 341' },
+  { from: 'EPM 221', to: 'EPM 222' },
+  { from: 'EPM 222', to: 'EPM 341' },
+  { from: 'EPM 241', to: 'MPE 251' },
+  { from: 'EPM 231', to: 'MPE 451' },
+  { from: 'EPM 331', to: 'EPM 351' },
+  { from: 'EPM 341', to: 'EPM 342' },
+  { from: 'EPM 341', to: 'MPE 351' },
+  { from: 'MPE 341', to: 'MPE 351' },
+  { from: 'MPE 311', to: 'MPE 312' },
+  { from: 'MPE 312', to: 'EPM 411' },
+  { from: 'EPM 342', to: 'EPM 412' },
+  { from: 'MPE 411', to: 'MPE 452' },
+  { from: 'EPM 411', to: 'EPM 431' },
+  { from: 'EPM 412', to: 'MPE 412' }
+];
+
+// Helper to normalize course code (e.g. 'GUR 0C1' -> 'GUR0C1', 'BSC 011' -> 'BSC011')
 export function normalizeCode(code) {
   if (!code) return '';
   return code.toUpperCase().replace(/\s+/g, '').trim();
 }
 
-// LocalStorage key for persisting custom prerequisite links
-export const PREREQUISITE_STORAGE_KEY = 'degree_custom_prerequisite_links';
+// Flat list generator with requires / unlocks computed
+function createFlatCourseList(structure, prereqLinks) {
+  return structure.flatMap(lvl =>
+    lvl.semesters.flatMap(sem => sem.courses.map(c => {
+      const norm = normalizeCode(c.code);
+      const requires = prereqLinks.filter(l => normalizeCode(l.to) === norm).map(l => l.from);
+      const unlocks = prereqLinks.filter(l => normalizeCode(l.from) === norm).map(l => l.to);
+      return { ...c, level: lvl.level, semester: sem.semester, requires, unlocks };
+    }))
+  );
+}
 
-// Synchronous local storage loader for instant initial render
-export function loadPrerequisiteLinks() {
+export const AI_ALL_COURSES = createFlatCourseList(AI_DEGREE_STRUCTURE, AI_PREREQUISITE_LINKS);
+export const EPP_ALL_COURSES = createFlatCourseList(EEP_DEGREE_STRUCTURE, EPP_PREREQUISITE_LINKS);
+export const EEP_ALL_COURSES = EPP_ALL_COURSES;
+export const EEP_PREREQUISITE_LINKS = EPP_PREREQUISITE_LINKS;
+export const EPP_DEGREE_STRUCTURE = EEP_DEGREE_STRUCTURE;
+
+// Backwards-compatible default exports (points to AI)
+export const DEGREE_STRUCTURE = AI_DEGREE_STRUCTURE;
+export const PREREQUISITE_LINKS = AI_PREREQUISITE_LINKS;
+export const ALL_COURSES = AI_ALL_COURSES;
+
+export const PREREQUISITE_STORAGE_KEY = 'degree_custom_prerequisite_links';
+export const EEP_PREREQUISITE_STORAGE_KEY = 'degree_custom_prerequisite_links_eep';
+
+// ==========================================
+// 3. PROGRAM METADATA CONFIGS
+// ==========================================
+export const PROGRAMS = {
+  AI: {
+    id: 'AI',
+    name: 'Artificial Intelligence',
+    shortCode: 'AI',
+    fullName: 'Artificial Intelligence & Machine Learning Engineering Program',
+    templatePath: '/template.xlsx',
+    templateFileName: 'template.xlsx',
+    levelLabelPrefix: 'AI-LEVEL',
+    treeTitle: 'Course Tree - Artificial Intelligence Engineering Program',
+    structure: AI_DEGREE_STRUCTURE,
+    defaultPrerequisites: AI_PREREQUISITE_LINKS,
+    courses: AI_ALL_COURSES,
+    storageKey: PREREQUISITE_STORAGE_KEY,
+    fileEndpoint: '/prerequisites.json',
+    allSeasonCourses: new Set(['BSC041', 'PRD031', 'PRD041', 'CCE031']),
+    rowBlockSize: 55,
+    headerCells: {
+      nameCell: 'F2',
+      levelCell: 'D1',
+      cgpaTopCell: 'P3',
+      cgpaBottomCell: 'W51',
+      semesterCell: 'G3',
+      semesterGpaCell: 'K3',
+      warningsCell: 'N4',
+      academicYearCell: 'Q2'
+    }
+  },
+  EEP: {
+    id: 'EEP',
+    name: 'Energy and Electrical Power',
+    shortCode: 'EEP',
+    fullName: 'Energy and Electrical Power Engineering Program',
+    templatePath: '/EPP Template.xlsx',
+    templateFileName: 'EPP Template.xlsx',
+    levelLabelPrefix: 'EEP-LEVEL',
+    treeTitle: 'Course Tree - Energy and Electrical Power Engineering Program',
+    structure: EPP_DEGREE_STRUCTURE,
+    defaultPrerequisites: EPP_PREREQUISITE_LINKS,
+    courses: EPP_ALL_COURSES,
+    storageKey: EEP_PREREQUISITE_STORAGE_KEY,
+    fileEndpoint: '/prerequisites_eep.json',
+    allSeasonCourses: new Set(['BSC041', 'PRD031', 'PRD041', 'CCE031']),
+    rowBlockSize: 120,
+    headerCells: {
+      nameCell: 'G5',
+      levelCell: 'D4',
+      cgpaTopCell: 'Q6',
+      cgpaBottomCell: 'Y111',
+      semesterCell: 'G6',
+      semesterGpaCell: 'L6',
+      warningsCell: 'N7',
+      academicYearCell: 'Q5'
+    }
+  }
+};
+
+/**
+ * Normalizes any program string / ID into 'AI' or 'EEP'
+ */
+export function normalizeProgramId(input) {
+  if (!input) return 'AI';
+  const str = String(input).toLowerCase().trim();
+  if (
+    str.includes('eep') ||
+    str.includes('epp') ||
+    str.includes('energy') ||
+    str.includes('power') ||
+    str.includes('كهرباء') ||
+    str.includes('طاقة') ||
+    str.includes('قوى')
+  ) {
+    return 'EEP';
+  }
+  return 'AI';
+}
+
+/**
+ * Get program config by ID or name
+ */
+export function getProgram(programId) {
+  const norm = normalizeProgramId(programId);
+  return PROGRAMS[norm] || PROGRAMS.AI;
+}
+
+/**
+ * Get degree structure for a specific program
+ */
+export function getDegreeStructure(programId = 'AI') {
+  return getProgram(programId).structure;
+}
+
+/**
+ * Get flat courses list for a specific program
+ */
+export function getAllCourses(programId = 'AI') {
+  return getProgram(programId).courses;
+}
+
+/**
+ * Fast lookup map helper
+ */
+const PROGRAM_LOOKUP_MAPS = {
+  AI: new Map(),
+  EEP: new Map()
+};
+
+for (const [pId, pData] of Object.entries(PROGRAMS)) {
+  const map = PROGRAM_LOOKUP_MAPS[pId];
+  for (const c of pData.courses) {
+    map.set(normalizeCode(c.code), c);
+    if (c.aliases) {
+      for (const a of c.aliases) {
+        map.set(normalizeCode(a), c);
+      }
+    }
+  }
+}
+
+export function findCourseInProgram(code, programId = 'AI') {
+  const norm = normalizeCode(code);
+  const pNorm = normalizeProgramId(programId);
+  const map = PROGRAM_LOOKUP_MAPS[pNorm] || PROGRAM_LOOKUP_MAPS.AI;
+  return map.get(norm) || null;
+}
+
+// ==========================================
+// 4. PREREQUISITE MANAGEMENT FUNCTIONS
+// ==========================================
+
+export function loadPrerequisiteLinks(programId = 'AI') {
+  const prog = getProgram(programId);
   try {
-    const saved = localStorage.getItem(PREREQUISITE_STORAGE_KEY);
+    const saved = localStorage.getItem(prog.storageKey);
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -221,49 +592,45 @@ export function loadPrerequisiteLinks() {
       }
     }
   } catch (err) {
-    console.warn('Failed to load prerequisite links from localStorage:', err);
+    console.warn(`Failed to load ${prog.id} prerequisite links from localStorage:`, err);
   }
-  return [...PREREQUISITE_LINKS];
+  return [...prog.defaultPrerequisites];
 }
 
-// Fetch persisted prerequisites from local file /prerequisites.json (cache-busted)
-export async function fetchFilePrerequisiteLinks() {
+export async function fetchFilePrerequisiteLinks(programId = 'AI') {
+  const prog = getProgram(programId);
   try {
-    const res = await fetch(`/prerequisites.json?t=${Date.now()}`, { cache: 'no-store' });
+    const res = await fetch(`${prog.fileEndpoint}?t=${Date.now()}`, { cache: 'no-store' });
     if (res.ok) {
       const links = await res.json();
       if (Array.isArray(links) && links.length > 0) {
-        // Also keep localStorage in sync
         try {
-          localStorage.setItem(PREREQUISITE_STORAGE_KEY, JSON.stringify(links));
+          localStorage.setItem(prog.storageKey, JSON.stringify(links));
         } catch (_) {}
         return links;
       }
     }
   } catch (err) {
-    console.warn('Could not fetch /prerequisites.json:', err);
+    console.warn(`Could not fetch ${prog.fileEndpoint}:`, err);
   }
   return null;
 }
 
-// Save prerequisite links to both localStorage and local file public/prerequisites.json
-export async function savePrerequisiteLinks(links) {
-  // 1. Always save immediately to localStorage
+export async function savePrerequisiteLinks(links, programId = 'AI') {
+  const prog = getProgram(programId);
   try {
-    localStorage.setItem(PREREQUISITE_STORAGE_KEY, JSON.stringify(links));
+    localStorage.setItem(prog.storageKey, JSON.stringify(links));
   } catch (err) {
-    console.error('Failed to save prerequisite links to localStorage:', err);
+    console.error(`Failed to save ${prog.id} prerequisite links to localStorage:`, err);
   }
 
-  // 2. Persist to local project file public/prerequisites.json via dev server endpoint
   try {
     const res = await fetch('/api/save-prerequisites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(links)
+      body: JSON.stringify({ program: prog.id, links })
     });
     if (res.ok) {
-      console.log(`Saved ${links.length} prerequisite rules directly to local file public/prerequisites.json`);
       return { success: true, localFile: true };
     }
   } catch (err) {
@@ -273,35 +640,32 @@ export async function savePrerequisiteLinks(links) {
   return { success: true, localFile: false };
 }
 
-// Download prerequisites as a JSON file to the user's computer
-export function downloadPrerequisitesJson(links) {
+export function downloadPrerequisitesJson(links, programId = 'AI') {
+  const prog = getProgram(programId);
   const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(links, null, 2));
   const dlAnchor = document.createElement('a');
   dlAnchor.setAttribute('href', dataStr);
-  dlAnchor.setAttribute('download', 'degree_prerequisites.json');
+  dlAnchor.setAttribute('download', `${prog.id.toLowerCase()}_degree_prerequisites.json`);
   document.body.appendChild(dlAnchor);
   dlAnchor.click();
   dlAnchor.remove();
 }
 
-// Set current prerequisite links as the new permanent default
-export async function makeDefaultPrerequisiteLinks(links) {
-  // 1. Update localStorage
+export async function makeDefaultPrerequisiteLinks(links, programId = 'AI') {
+  const prog = getProgram(programId);
   try {
-    localStorage.setItem(PREREQUISITE_STORAGE_KEY, JSON.stringify(links));
+    localStorage.setItem(prog.storageKey, JSON.stringify(links));
   } catch (err) {
     console.error('Failed to update localStorage:', err);
   }
 
-  // 2. Persist to public/prerequisites.json and codebase defaults via server endpoint
   try {
     const res = await fetch('/api/set-default-prerequisites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(links)
+      body: JSON.stringify({ program: prog.id, links })
     });
     if (res.ok) {
-      console.log(`Saved ${links.length} rules as the new permanent default.`);
       return { success: true, localFile: true };
     }
   } catch (err) {
@@ -309,65 +673,37 @@ export async function makeDefaultPrerequisiteLinks(links) {
   }
   return { success: true, localFile: false };
 }
-export async function resetPrerequisiteLinks() {
+
+export async function resetPrerequisiteLinks(programId = 'AI') {
+  const prog = getProgram(programId);
   try {
-    localStorage.removeItem(PREREQUISITE_STORAGE_KEY);
+    localStorage.removeItem(prog.storageKey);
   } catch (err) {
-    console.error('Failed to reset prerequisite links in localStorage:', err);
+    console.error(`Failed to reset ${prog.id} prerequisite links in localStorage:`, err);
   }
 
-  // Reset file on disk to PREREQUISITE_LINKS defaults
   try {
     await fetch('/api/save-prerequisites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(PREREQUISITE_LINKS)
+      body: JSON.stringify({ program: prog.id, links: prog.defaultPrerequisites })
     });
   } catch (_) {}
 
-  return [...PREREQUISITE_LINKS];
+  return [...prog.defaultPrerequisites];
 }
 
-// Get courses that are required before taking `code`
-export function getCourseRequires(code, links = PREREQUISITE_LINKS) {
+export function getCourseRequires(code, links = AI_PREREQUISITE_LINKS) {
   const norm = normalizeCode(code);
   return links.filter(l => normalizeCode(l.to) === norm).map(l => l.from);
 }
 
-// Get courses that `code` unlocks
-export function getCourseUnlocks(code, links = PREREQUISITE_LINKS) {
+export function getCourseUnlocks(code, links = AI_PREREQUISITE_LINKS) {
   const norm = normalizeCode(code);
   return links.filter(l => normalizeCode(l.from) === norm).map(l => l.to);
 }
 
-// Flat list of all 60 courses with prerequisite mappings
-export const ALL_COURSES = DEGREE_STRUCTURE.flatMap(lvl =>
-  lvl.semesters.flatMap(sem => sem.courses.map(c => {
-    const norm = normalizeCode(c.code);
-    const requires = PREREQUISITE_LINKS.filter(l => normalizeCode(l.to) === norm).map(l => l.from);
-    const unlocks = PREREQUISITE_LINKS.filter(l => normalizeCode(l.from) === norm).map(l => l.to);
-    return { ...c, level: lvl.level, semester: sem.semester, requires, unlocks };
-  }))
-);
-
-// Map of normalized course code -> course object for O(1) lookups
-const COURSE_LOOKUP_MAP = new Map();
-for (const c of ALL_COURSES) {
-  COURSE_LOOKUP_MAP.set(normalizeCode(c.code), c);
-  if (c.aliases) {
-    for (const a of c.aliases) {
-      COURSE_LOOKUP_MAP.set(normalizeCode(a), c);
-    }
-  }
-}
-
-/**
- * In Level 0, these 4 subjects can be taken in either Fall or Spring:
- * - BSC 041: Chemical Engineering (3 CH)
- * - PRD 031: Engineering Drawing and Projection (3 CH)
- * - PRD 041: Production Technology (3 CH)
- * - CCE 031: Introduction to Computer Science (3 CH)
- */
+// Level 0 dual-season courses (shared across programs)
 export const LEVEL_0_ALL_SEASON_COURSES = new Set([
   'BSC041',
   'PRD031',
@@ -375,61 +711,39 @@ export const LEVEL_0_ALL_SEASON_COURSES = new Set([
   'CCE031'
 ]);
 
-/**
- * Returns true if the course is allowed to be taken in both Fall and Spring semesters.
- */
 export function isAllSeasonCourse(courseCode) {
   return LEVEL_0_ALL_SEASON_COURSES.has(normalizeCode(courseCode));
 }
 
-/**
- * Get primary curriculum season ('Fall', 'Spring', or 'Both') for a course code.
- * Level 0 interchangeable courses return 'Both'.
- * Otherwise: Semester 1 = Fall, Semester 2 = Spring.
- */
-export function getCourseSeason(courseCode) {
+export function getCourseSeason(courseCode, programId = 'AI') {
   const norm = normalizeCode(courseCode);
   if (LEVEL_0_ALL_SEASON_COURSES.has(norm)) {
     return 'Both';
   }
-  const course = COURSE_LOOKUP_MAP.get(norm);
+  const course = findCourseInProgram(norm, programId);
   if (!course) return null;
   return course.semester === 1 ? 'Fall' : course.semester === 2 ? 'Spring' : null;
 }
 
-/**
- * Check if a course is eligible to be taken in the given active season ('Fall' or 'Spring').
- * 'Both' (BSC 041, PRD 031, PRD 041, CCE 031) is eligible in both Fall and Spring.
- */
-export function isCourseEligibleForSeason(courseCode, activeSeason) {
+export function isCourseEligibleForSeason(courseCode, activeSeason, programId = 'AI') {
   if (!activeSeason) return true;
-  const courseSeason = getCourseSeason(courseCode);
+  const courseSeason = getCourseSeason(courseCode, programId);
   if (!courseSeason || courseSeason === 'Both') return true;
   return courseSeason.toLowerCase() === activeSeason.toLowerCase();
 }
 
-/**
- * Determine a student's active registration season ('Fall' or 'Spring').
- * Priority:
- * 1. If student already selected courses, infer from non-dual-season courses first.
- * 2. If student has completed regular semesters, next registration is determined by curriculum progression:
- *    - after Fall -> Spring
- *    - after Spring -> Fall
- * 3. Default to 'Fall' (1st semester of any level).
- */
 export function getStudentRegistrationSeason(student) {
   if (!student) return 'Fall';
+  const progId = student.program || 'AI';
 
-  // 1. If courses are already selected, infer active season from the first course with a dedicated season
   const selected = student.selectedCourseCodes || [];
   if (selected.length > 0) {
     for (const code of selected) {
-      const s = getCourseSeason(code);
+      const s = getCourseSeason(code, progId);
       if (s && s !== 'Both') return s;
     }
   }
 
-  // 2. Infer from last recorded regular semester
   const lastRegular = student.regularSemesters?.at(-1);
   if (lastRegular) {
     const semName = (lastRegular.semesterName || '').toLowerCase();
@@ -439,17 +753,14 @@ export function getStudentRegistrationSeason(student) {
     return 'Fall';
   }
 
-  // 3. Fallback default
   return 'Fall';
 }
 
-/**
- * Check if all prerequisites of a course are satisfied (passed with points > 0)
- * Returns { canTake: boolean, missingPrereqs: string[] }
- */
-export function checkPrerequisitesMet(courseCode, studentCourseMap = {}, links = PREREQUISITE_LINKS) {
+export function checkPrerequisitesMet(courseCode, studentCourseMap = {}, links = null, programId = 'AI') {
+  const prog = getProgram(programId);
+  const activeLinks = links || prog.defaultPrerequisites;
   const norm = normalizeCode(courseCode);
-  const requires = links
+  const requires = activeLinks
     .filter(l => normalizeCode(l.to) === norm)
     .map(l => l.from);
 
@@ -458,14 +769,14 @@ export function checkPrerequisitesMet(courseCode, studentCourseMap = {}, links =
   }
 
   const missingPrereqs = [];
+  const coursesList = prog.courses;
 
   for (const reqCode of requires) {
     const reqNorm = normalizeCode(reqCode);
     let record = studentCourseMap[reqNorm];
 
-    // Check aliases if direct code match not found
     if (!record) {
-      const matchCourse = ALL_COURSES.find(c => normalizeCode(c.code) === reqNorm);
+      const matchCourse = coursesList.find(c => normalizeCode(c.code) === reqNorm);
       if (matchCourse && matchCourse.aliases) {
         for (const alias of matchCourse.aliases) {
           if (studentCourseMap[normalizeCode(alias)]) {
@@ -488,13 +799,6 @@ export function checkPrerequisitesMet(courseCode, studentCourseMap = {}, links =
   };
 }
 
-/**
- * Determine maximum allowed course registration limit for a student based on academic GPA rules:
- * - If semester GPA < 1.7: allow up to 4 subjects
- * - If semester GPA >= 1.7 and cumulative GPA < 2.0: allow up to 5 subjects
- * - If semester GPA >= 1.7 and cumulative GPA >= 2.0: allow up to 6 subjects
- * - Default / fallback when no semester GPA available: based on CGPA (>= 2.0 -> 6, else 5)
- */
 export function getRegistrationLimit(student) {
   if (!student) {
     return {
@@ -513,7 +817,6 @@ export function getRegistrationLimit(student) {
         ? Number(student.regularSemesters.at(-1).gpa)
         : null);
 
-  // Rule 1: Semester GPA < 1.7 -> 4 subjects
   if (semGpa !== null && semGpa < 1.7) {
     return {
       maxCourses: 4,
@@ -524,7 +827,6 @@ export function getRegistrationLimit(student) {
     };
   }
 
-  // Rule 2: Semester GPA >= 1.7 and Cumulative GPA < 2.0 -> 5 subjects
   if (cgpa !== null && cgpa < 2.0) {
     return {
       maxCourses: 5,
@@ -537,7 +839,6 @@ export function getRegistrationLimit(student) {
     };
   }
 
-  // Rule 3: Semester GPA >= 1.7 (or good standing) and Cumulative GPA >= 2.0 -> 6 subjects
   return {
     maxCourses: 6,
     ruleText: semGpa !== null
@@ -549,21 +850,18 @@ export function getRegistrationLimit(student) {
   };
 }
 
-/**
- * Automatically assign courses for a student according to academic priorities:
- * 1. Failed courses (0.00) that have satisfied prerequisites (highest priority to repair GPA)
- * 2. Unattempted / pending courses in curriculum order whose prerequisites are satisfied
- * 3. Strictly capped by the student's GPA registration limit (4, 5, or 6 subjects)
- * Returns { assignedCodes: string[], limit: number, failedAssigned: number, pendingAssigned: number, skippedPrereq: number }
- */
-export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUISITE_LINKS) {
+export function autoAssignEligibleCourses(student, prerequisiteLinks = null, programId = null) {
   if (!student) {
     return { assignedCodes: [], limit: 6, failedAssigned: 0, pendingAssigned: 0, skippedPrereq: 0 };
   }
 
+  const progId = programId || student.program || 'AI';
+  const prog = getProgram(progId);
+  const links = prerequisiteLinks || prog.defaultPrerequisites;
   const regLimit = getRegistrationLimit(student);
   const maxCourses = regLimit.maxCourses;
   const courseMap = student.courseMap || {};
+  const coursesList = prog.courses;
 
   const assigned = [];
   const assignedNorms = new Set();
@@ -574,8 +872,7 @@ export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUIS
   const candidateFailed = [];
   const candidatePending = [];
 
-  // Categorize candidate courses
-  for (const course of ALL_COURSES) {
+  for (const course of coursesList) {
     const norm = normalizeCode(course.code);
     let record = courseMap[norm];
     if (!record && course.aliases) {
@@ -587,7 +884,6 @@ export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUIS
       }
     }
 
-    // If passed with points > 0, cannot register
     if (record && record.isPassed && (record.points === undefined || record.points > 0.00)) {
       continue;
     }
@@ -602,7 +898,7 @@ export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUIS
   // Priority 1: Failed courses with satisfied prerequisites
   for (const course of candidateFailed) {
     if (assigned.length >= maxCourses) break;
-    const prereqCheck = checkPrerequisitesMet(course.code, courseMap, prerequisiteLinks);
+    const prereqCheck = checkPrerequisitesMet(course.code, courseMap, links, progId);
     if (prereqCheck.canTake) {
       assigned.push(course.code);
       assignedNorms.add(normalizeCode(course.code));
@@ -618,7 +914,7 @@ export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUIS
     const norm = normalizeCode(course.code);
     if (assignedNorms.has(norm)) continue;
 
-    const prereqCheck = checkPrerequisitesMet(course.code, courseMap, prerequisiteLinks);
+    const prereqCheck = checkPrerequisitesMet(course.code, courseMap, links, progId);
     if (prereqCheck.canTake) {
       assigned.push(course.code);
       assignedNorms.add(norm);
@@ -637,4 +933,3 @@ export function autoAssignEligibleCourses(student, prerequisiteLinks = PREREQUIS
     ruleText: regLimit.ruleText
   };
 }
-

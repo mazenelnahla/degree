@@ -1,6 +1,15 @@
 import JSZip from 'jszip';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
-import { ALL_COURSES, PREREQUISITE_LINKS, normalizeCode } from './courseMapping.js';
+import {
+  ALL_COURSES,
+  AI_ALL_COURSES,
+  EPP_ALL_COURSES,
+  PREREQUISITE_LINKS,
+  normalizeCode,
+  normalizeProgramId,
+  getProgram,
+  getAllCourses
+} from './courseMapping.js';
 import { cleanArabicText } from './pdfParser.js';
 import { populateRegistrationSheet } from './regFormGenerator.js';
 
@@ -73,7 +82,8 @@ function getAiLevelLabel(student) {
   const suffix = level % 100 >= 11 && level % 100 <= 13
     ? 'TH'
     : ({ 1: 'ST', 2: 'ND', 3: 'RD' }[level % 10] || 'TH');
-  return `${level}${suffix} AI-LEVEL`;
+  const isEpp = normalizeProgramId(student?.program) === 'EEP';
+  return `${level}${suffix} ${isEpp ? 'EEP-LEVEL' : 'AI-LEVEL'}`;
 }
 
 /**
@@ -275,25 +285,61 @@ function buildStudentCellMaps(student, offset = 0) {
   const gpaValuesMap = {};
   const selectedCourses = [];
 
+  const isEpp = normalizeProgramId(student?.program) === 'EEP';
+  const progCourses = isEpp ? EPP_ALL_COURSES : AI_ALL_COURSES;
+
   // Set of normalized course codes that the user has selected/checkpointed
   const selectedSet = new Set((student.selectedCourseCodes || []).map(normalizeCode));
 
-  if (student.levelGpas) {
-    student.levelGpas.forEach(lg => {
-      if (lg.gpaCell && lg.gpa !== null && lg.gpa !== undefined) {
-        const m = lg.gpaCell.match(/^([A-Z]+)(\d+)$/);
-        if (m) {
-          const targetRef = `${m[1]}${parseInt(m[2], 10) + offset}`;
-          gpaValuesMap[targetRef] = lg.gpa.toFixed(2);
+  const semGpaCellList = isEpp ? [
+    { level: 0, semester: 1, cell: 'Y10' },
+    { level: 0, semester: 2, cell: 'Y20' },
+    { level: 1, semester: 1, cell: 'Y30' },
+    { level: 1, semester: 2, cell: 'Y40' },
+    { level: 2, semester: 1, cell: 'Y50' },
+    { level: 2, semester: 2, cell: 'Y60' },
+    { level: 3, semester: 1, cell: 'Y70' },
+    { level: 3, semester: 2, cell: 'Y80' },
+    { level: 4, semester: 1, cell: 'Y90' },
+    { level: 4, semester: 2, cell: 'Y100' },
+  ] : [
+    { level: 0, semester: 1, cell: 'W7' },
+    { level: 0, semester: 2, cell: 'W11' },
+    { level: 1, semester: 1, cell: 'W16' },
+    { level: 1, semester: 2, cell: 'W20' },
+    { level: 2, semester: 1, cell: 'W25' },
+    { level: 2, semester: 2, cell: 'W30' },
+    { level: 3, semester: 1, cell: 'W34' },
+    { level: 3, semester: 2, cell: 'W38' },
+    { level: 4, semester: 1, cell: 'W43' },
+    { level: 4, semester: 2, cell: 'W47' },
+  ];
+
+  if (student.levelGpas && Array.isArray(student.levelGpas)) {
+    student.levelGpas.forEach((lg, idx) => {
+      if (lg.gpa !== null && lg.gpa !== undefined && !isNaN(lg.gpa)) {
+        let slot = semGpaCellList.find(s => s.level === lg.level && s.semester === lg.semester);
+        if (!slot) {
+          slot = semGpaCellList[idx];
+        }
+        const cellRef = slot ? slot.cell : lg.gpaCell;
+        if (cellRef) {
+          const m = cellRef.match(/^([A-Z]+)(\d+)$/);
+          if (m) {
+            const targetRef = `${m[1]}${parseInt(m[2], 10) + offset}`;
+            gpaValuesMap[targetRef] = lg.gpa.toFixed(2);
+          }
         }
       }
     });
   }
   if (student.latestSemesterGpa !== null && student.latestSemesterGpa !== undefined) {
-    gpaValuesMap[`K${3 + offset}`] = student.latestSemesterGpa.toFixed(2);
+    const semGpaCol = isEpp ? 'L' : 'K';
+    const semGpaRow = isEpp ? 6 : 3;
+    gpaValuesMap[`${semGpaCol}${semGpaRow + offset}`] = student.latestSemesterGpa.toFixed(2);
   }
 
-  for (const course of ALL_COURSES) {
+  for (const course of progCourses) {
     const normCode = normalizeCode(course.code);
     let studentCourse = student.courseMap[normCode];
     if (!studentCourse && course.aliases) {
@@ -541,39 +587,84 @@ export async function generatePreservedExcelWorkbook(templateBuffer, studentTran
     const sheetDoc = parseXml(templateSheetXml);
     const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap, selectedCourses } = buildStudentCellMaps(student, 0);
 
+    const isEpp = normalizeProgramId(student?.program) === 'EEP' ||
+      templateSheetXml.includes('EEP') ||
+      templateSheetXml.includes('Energy and Electrical Power');
+
     const allCells = Array.from(sheetDoc.getElementsByTagName('c'));
     for (const c of allCells) {
       const r = c.getAttribute('r');
-      if (r === 'F2') {
-        c.setAttribute('t', 'inlineStr');
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
-        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
-        tEl.textContent = cleanArabicText(student.studentName);
-        isEl.appendChild(tEl);
-        c.appendChild(isEl);
-      } else if (r === 'D1') {
-        c.setAttribute('t', 'inlineStr');
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
-        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
-        tEl.textContent = getAiLevelLabel(student);
-        isEl.appendChild(tEl);
-        c.appendChild(isEl);
-      } else if (r === 'P3' && student.cgpa !== null && student.cgpa !== undefined) {
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
-        vEl.textContent = student.cgpa.toFixed(2);
-        c.appendChild(vEl);
-      } else if (r === 'W51' && student.cgpa !== null && student.cgpa !== undefined) {
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
-        fEl.textContent = '$P3';
-        c.appendChild(fEl);
-        const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
-        vEl.textContent = student.cgpa.toFixed(2);
-        c.appendChild(vEl);
-      } else if (gpaValuesMap[r] !== undefined) {
+      if (isEpp) {
+        if (r === 'G5') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = cleanArabicText(student.studentName);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'D4') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = getAiLevelLabel(student);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'Q6' && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        } else if ((r === 'Y111' || r === 'Y112') && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
+          fEl.textContent = '$Q6';
+          c.appendChild(fEl);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        } else if (r === 'L6' && student.latestSemesterGpa !== null && student.latestSemesterGpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.latestSemesterGpa.toFixed(2);
+          c.appendChild(vEl);
+        }
+      } else {
+        if (r === 'F2') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = cleanArabicText(student.studentName);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'D1') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = getAiLevelLabel(student);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'P3' && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        } else if (r === 'W51' && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
+          fEl.textContent = '$P3';
+          c.appendChild(fEl);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        }
+      }
+
+      if (gpaValuesMap[r] !== undefined) {
+        c.removeAttribute('t');
         while (c.firstChild) c.removeChild(c.firstChild);
         const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
         vEl.textContent = gpaValuesMap[r];
@@ -704,8 +795,12 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
   const templateAnchors = Array.from(drawingDoc.getElementsByTagName('xdr:twoCellAnchor'));
   while (wsDrEl.firstChild) wsDrEl.removeChild(wsDrEl.firstChild);
 
-  // Stacking block height per student (52 rows of content + 3 blank gap rows = 55 rows per student)
-  const ROW_BLOCK_SIZE = 55;
+  const isEpp = templateSheetXml.includes('EEP') ||
+    templateSheetXml.includes('Energy and Electrical Power') ||
+    studentTranscripts.some(s => normalizeProgramId(s.program) === 'EEP');
+
+  // Stacking block height per student (120 for EEP, 55 for AI)
+  const ROW_BLOCK_SIZE = isEpp ? 120 : 55;
 
   studentTranscripts.forEach((student, sIdx) => {
     const offset = sIdx * ROW_BLOCK_SIZE;
@@ -726,46 +821,97 @@ export async function generateSingleSheetCombinedWorkbook(templateBuffer, studen
         const newRef = `${colLetter}${newRowNum}`;
         c.setAttribute('r', newRef);
 
-        // Update Student Name
-        if (colLetter === 'F' && origRowNum === 2) {
-          c.setAttribute('t', 'inlineStr');
-          while (c.firstChild) c.removeChild(c.firstChild);
-          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
-          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
-          tEl.textContent = cleanArabicText(student.studentName);
-          isEl.appendChild(tEl);
-          c.appendChild(isEl);
+        if (isEpp) {
+          // Update Student Name (G5)
+          if (colLetter === 'G' && origRowNum === 5) {
+            c.setAttribute('t', 'inlineStr');
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+            const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+            tEl.textContent = cleanArabicText(student.studentName);
+            isEl.appendChild(tEl);
+            c.appendChild(isEl);
+          }
+          // Update EEP-level header in D4
+          else if (colLetter === 'D' && origRowNum === 4) {
+            c.setAttribute('t', 'inlineStr');
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+            const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+            tEl.textContent = getAiLevelLabel(student);
+            isEl.appendChild(tEl);
+            c.appendChild(isEl);
+          }
+          // Update CGPA in top header (Q6)
+          else if (colLetter === 'Q' && origRowNum === 6 && student.cgpa !== null && student.cgpa !== undefined) {
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+            vEl.textContent = student.cgpa.toFixed(2);
+            c.appendChild(vEl);
+          }
+          // Update CGPA in bottom summary box (Y111 or Y112)
+          else if (colLetter === 'Y' && (origRowNum === 111 || origRowNum === 112) && student.cgpa !== null && student.cgpa !== undefined) {
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
+            const targetQRow = 6 + offset;
+            fEl.textContent = `$Q$${targetQRow}`;
+            c.appendChild(fEl);
+            const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+            vEl.textContent = student.cgpa.toFixed(2);
+            c.appendChild(vEl);
+          }
+          // Update Semester GPA in L6
+          else if (colLetter === 'L' && origRowNum === 6 && student.latestSemesterGpa !== null && student.latestSemesterGpa !== undefined) {
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+            vEl.textContent = student.latestSemesterGpa.toFixed(2);
+            c.appendChild(vEl);
+          }
+        } else {
+          // AI logic
+          // Update Student Name
+          if (colLetter === 'F' && origRowNum === 2) {
+            c.setAttribute('t', 'inlineStr');
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+            const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+            tEl.textContent = cleanArabicText(student.studentName);
+            isEl.appendChild(tEl);
+            c.appendChild(isEl);
+          }
+          // Update AI-level header in D1
+          else if (colLetter === 'D' && origRowNum === 1) {
+            c.setAttribute('t', 'inlineStr');
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+            const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+            tEl.textContent = getAiLevelLabel(student);
+            isEl.appendChild(tEl);
+            c.appendChild(isEl);
+          }
+          // Update CGPA in top header (P3)
+          else if (colLetter === 'P' && origRowNum === 3 && student.cgpa !== null && student.cgpa !== undefined) {
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+            vEl.textContent = student.cgpa.toFixed(2);
+            c.appendChild(vEl);
+          }
+          // Update CGPA in bottom summary box (W51)
+          else if (colLetter === 'W' && origRowNum === 51 && student.cgpa !== null && student.cgpa !== undefined) {
+            while (c.firstChild) c.removeChild(c.firstChild);
+            const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
+            const targetPRow = 3 + offset;
+            fEl.textContent = `$P$${targetPRow}`;
+            c.appendChild(fEl);
+            const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+            vEl.textContent = student.cgpa.toFixed(2);
+            c.appendChild(vEl);
+          }
         }
-        // Update AI-level header in D1
-        else if (colLetter === 'D' && origRowNum === 1) {
-          c.setAttribute('t', 'inlineStr');
-          while (c.firstChild) c.removeChild(c.firstChild);
-          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
-          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
-          tEl.textContent = getAiLevelLabel(student);
-          isEl.appendChild(tEl);
-          c.appendChild(isEl);
-        }
-        // Update CGPA in top header (P3)
-        else if (colLetter === 'P' && origRowNum === 3 && student.cgpa !== null && student.cgpa !== undefined) {
-          while (c.firstChild) c.removeChild(c.firstChild);
-          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
-          vEl.textContent = student.cgpa.toFixed(2);
-          c.appendChild(vEl);
-        }
-        // Update CGPA in bottom summary box (W51)
-        else if (colLetter === 'W' && origRowNum === 51 && student.cgpa !== null && student.cgpa !== undefined) {
-          while (c.firstChild) c.removeChild(c.firstChild);
-          const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
-          const targetPRow = 3 + offset;
-          fEl.textContent = `$P$${targetPRow}`;
-          c.appendChild(fEl);
-          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
-          vEl.textContent = student.cgpa.toFixed(2);
-          c.appendChild(vEl);
-        }
+
         // Update Semester GPA
-        else if (gpaValuesMap[newRef] !== undefined) {
+        if (gpaValuesMap[newRef] !== undefined) {
+          c.removeAttribute('t');
           while (c.firstChild) c.removeChild(c.firstChild);
           const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
           vEl.textContent = gpaValuesMap[newRef];
@@ -998,9 +1144,13 @@ export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer
     }
   });
 
+  const isEpp = templateSheetXml.includes('EEP') ||
+    templateSheetXml.includes('Energy and Electrical Power') ||
+    studentTranscripts.some(s => normalizeProgramId(s.program) === 'EEP');
+
   // Stacking offset for Registration Form below the Degree Tree:
-  // Tree is rows 1-52; row 53-54 blank; PageBreak at 54; Registration Form starts at row 56
-  const REG_ROW_OFFSET = 55;
+  // Tree is rows 1-52 (AI) or 1-117 (EEP)
+  const REG_ROW_OFFSET = isEpp ? 120 : 55;
 
   const existingSheetNames = new Set();
   const createdSheetNames = [];
@@ -1014,40 +1164,81 @@ export async function generateCombinedTreeAndRegistrationWorkbook(templateBuffer
     const sheetDoc = parseXml(templateSheetXml);
     const { cellsToCrossWithX, cellsToFailRed, cellsToSelectGreen, checkpointTextMap, gpaValuesMap, selectedCourses } = buildStudentCellMaps(student, 0);
 
-    // 1) Populate Degree Tree (Rows 1-52)
+    // 1) Populate Degree Tree
     const treeCells = Array.from(sheetDoc.getElementsByTagName('c'));
     for (const c of treeCells) {
       const r = c.getAttribute('r');
-      if (r === 'F2') {
-        c.setAttribute('t', 'inlineStr');
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
-        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
-        tEl.textContent = cleanArabicText(student.studentName);
-        isEl.appendChild(tEl);
-        c.appendChild(isEl);
-      } else if (r === 'D1') {
-        c.setAttribute('t', 'inlineStr');
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
-        const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
-        tEl.textContent = getAiLevelLabel(student);
-        isEl.appendChild(tEl);
-        c.appendChild(isEl);
-      } else if (r === 'P3' && student.cgpa !== null && student.cgpa !== undefined) {
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
-        vEl.textContent = student.cgpa.toFixed(2);
-        c.appendChild(vEl);
-      } else if (r === 'W51' && student.cgpa !== null && student.cgpa !== undefined) {
-        while (c.firstChild) c.removeChild(c.firstChild);
-        const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
-        fEl.textContent = '$P3';
-        c.appendChild(fEl);
-        const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
-        vEl.textContent = student.cgpa.toFixed(2);
-        c.appendChild(vEl);
-      } else if (gpaValuesMap[r] !== undefined) {
+      if (isEpp) {
+        if (r === 'G5') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = cleanArabicText(student.studentName);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'D4') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = getAiLevelLabel(student);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'Q6' && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        } else if ((r === 'Y111' || r === 'Y112') && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
+          fEl.textContent = '$Q6';
+          c.appendChild(fEl);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        } else if (r === 'L6' && student.latestSemesterGpa !== null && student.latestSemesterGpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.latestSemesterGpa.toFixed(2);
+          c.appendChild(vEl);
+        }
+      } else {
+        if (r === 'F2') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = cleanArabicText(student.studentName);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'D1') {
+          c.setAttribute('t', 'inlineStr');
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const isEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'is');
+          const tEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 't');
+          tEl.textContent = getAiLevelLabel(student);
+          isEl.appendChild(tEl);
+          c.appendChild(isEl);
+        } else if (r === 'P3' && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        } else if (r === 'W51' && student.cgpa !== null && student.cgpa !== undefined) {
+          while (c.firstChild) c.removeChild(c.firstChild);
+          const fEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'f');
+          fEl.textContent = '$P3';
+          c.appendChild(fEl);
+          const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
+          vEl.textContent = student.cgpa.toFixed(2);
+          c.appendChild(vEl);
+        }
+      }
+
+      if (gpaValuesMap[r] !== undefined) {
+        c.removeAttribute('t');
         while (c.firstChild) c.removeChild(c.firstChild);
         const vEl = sheetDoc.createElementNS(SPREADSHEETML_NS, 'v');
         vEl.textContent = gpaValuesMap[r];

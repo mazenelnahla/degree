@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { DEGREE_STRUCTURE, ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason, isAllSeasonCourse } from '../services/courseMapping.js';
+import { getDegreeStructure, getAllCourses, normalizeProgramId, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason, isAllSeasonCourse } from '../services/courseMapping.js';
 import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, AlertTriangle, ShieldAlert, Calendar } from 'lucide-react';
 import CrossSubjectsModal from './CrossSubjectsModal.jsx';
 
@@ -16,7 +16,8 @@ export default function DegreeGrid({
   onSelectAllPending,
   onClearSelected,
   onSelectSemesterCourses,
-  onDeselectSemesterCourses
+  onDeselectSemesterCourses,
+  onUpdateSemesterGpa
 }) {
   const [selectedLevel, setSelectedLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all'); // all, selected, passed, failed, not_taken
@@ -25,8 +26,15 @@ export default function DegreeGrid({
   const [hoveredCode, setHoveredCode] = useState(null);
   const [inlinePrereqToAdd, setInlinePrereqToAdd] = useState('');
   const [isCrossModalOpen, setIsCrossModalOpen] = useState(false);
+  const [editingGpaKey, setEditingGpaKey] = useState(null);
+  const [gpaInputVal, setGpaInputVal] = useState('');
 
   if (!student) return null;
+
+  const studentProg = normalizeProgramId(student?.program || 'AI');
+  const degreeStructure = getDegreeStructure(studentProg);
+  const allCourses = getAllCourses(studentProg);
+  const isEep = studentProg === 'EEP';
 
   const selectedCodesSet = new Set((student.selectedCourseCodes || []).map(normalizeCode));
   const regLimit = getRegistrationLimit(student);
@@ -34,7 +42,7 @@ export default function DegreeGrid({
   const activeSeason = getStudentRegistrationSeason(student);
 
   // Filter levels
-  const filteredLevels = DEGREE_STRUCTURE.filter(lvl => {
+  const filteredLevels = degreeStructure.filter(lvl => {
     if (selectedLevel !== 'all' && lvl.level !== parseInt(selectedLevel, 10)) {
       return false;
     }
@@ -394,23 +402,106 @@ export default function DegreeGrid({
                           <h3 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                             {sem.title}
                           </h3>
-                          {semGpaRecord ? (
-                            <span style={{
-                              padding: '0.2rem 0.55rem',
-                              borderRadius: '6px',
-                              background: 'rgba(99, 102, 241, 0.15)',
-                              border: '1px solid rgba(99, 102, 241, 0.3)',
-                              color: '#818cf8',
-                              fontFamily: 'var(--font-mono)',
-                              fontWeight: 700,
-                              fontSize: '0.8rem'
-                            }}>
-                              GPA: {semGpaRecord.gpa.toFixed(2)}
-                            </span>
+                          {editingGpaKey === `${lvl.level}_${sem.semester}` ? (
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }} onClick={(e) => e.stopPropagation()}>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="4"
+                                value={gpaInputVal}
+                                onChange={(e) => setGpaInputVal(e.target.value)}
+                                placeholder="0.00"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    onUpdateSemesterGpa && onUpdateSemesterGpa(lvl.level, sem.semester, gpaInputVal);
+                                    setEditingGpaKey(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingGpaKey(null);
+                                  }
+                                }}
+                                style={{
+                                  width: '68px',
+                                  padding: '0.18rem 0.45rem',
+                                  borderRadius: '6px',
+                                  fontSize: '0.78rem',
+                                  fontFamily: 'var(--font-mono)',
+                                  fontWeight: 700,
+                                  background: 'rgba(0, 0, 0, 0.4)',
+                                  border: '1px solid var(--accent-primary, #6366f1)',
+                                  color: 'var(--text-primary)',
+                                  outline: 'none'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateSemesterGpa && onUpdateSemesterGpa(lvl.level, sem.semester, gpaInputVal);
+                                  setEditingGpaKey(null);
+                                }}
+                                title="Save semester GPA"
+                                style={{
+                                  padding: '0.2rem 0.4rem',
+                                  borderRadius: '6px',
+                                  background: 'rgba(16, 185, 129, 0.2)',
+                                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                                  color: '#34d399',
+                                  cursor: 'pointer',
+                                  fontSize: '0.72rem',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                <Check size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingGpaKey(null)}
+                                title="Cancel"
+                                style={{
+                                  padding: '0.2rem 0.4rem',
+                                  borderRadius: '6px',
+                                  background: 'rgba(239, 68, 68, 0.15)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  color: '#f87171',
+                                  cursor: 'pointer',
+                                  fontSize: '0.72rem',
+                                  display: 'inline-flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                <X size={12} />
+                              </button>
+                            </div>
                           ) : (
-                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                              (Pending)
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingGpaKey(`${lvl.level}_${sem.semester}`);
+                                setGpaInputVal(semGpaRecord ? semGpaRecord.gpa.toFixed(2) : '');
+                              }}
+                              title={`Click to set/edit ${sem.title} GPA for Excel cell ${sem.gpaCell}`}
+                              style={{
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '6px',
+                                background: semGpaRecord ? 'rgba(99, 102, 241, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                border: semGpaRecord ? '1px solid rgba(99, 102, 241, 0.35)' : '1px dashed var(--border-color)',
+                                color: semGpaRecord ? '#818cf8' : 'var(--text-muted)',
+                                fontFamily: 'var(--font-mono)',
+                                fontWeight: 700,
+                                fontSize: '0.78rem',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span>{semGpaRecord ? `GPA: ${semGpaRecord.gpa.toFixed(2)}` : '+ Set GPA'}</span>
+                              <Edit3 size={11} style={{ opacity: 0.6 }} />
+                            </button>
                           )}
 
                           {/* Semester Select All / Deselect Action Buttons */}
@@ -546,8 +637,29 @@ export default function DegreeGrid({
                           </div>
                         </div>
 
-                        <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                          Excel: {sem.gpaCell} = <strong>{semGpaRecord ? semGpaRecord.gpa.toFixed(2) : '—'}</strong> • CH: {sem.chCell}
+                        <span style={{
+                          fontSize: '0.75rem',
+                          fontFamily: 'var(--font-mono)',
+                          color: 'var(--text-muted)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: 'rgba(255, 255, 255, 0.03)',
+                          padding: '0.2rem 0.55rem',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)'
+                        }}>
+                          <span>Excel GPA Cell:</span>
+                          <strong style={{ color: isEep ? '#f59e0b' : '#818cf8', fontWeight: 700 }}>
+                            {sem.gpaCell}
+                          </strong>
+                          <span>=</span>
+                          <strong style={{ color: semGpaRecord ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                            {semGpaRecord ? semGpaRecord.gpa.toFixed(2) : '—'}
+                          </strong>
+                          <span style={{ opacity: 0.5 }}>•</span>
+                          <span>CH ({sem.chCell}):</span>
+                          <strong>{sem.courses.reduce((sum, c) => sum + (c.ch || 3), 0)} hrs</strong>
                         </span>
                       </div>
 
@@ -573,9 +685,9 @@ export default function DegreeGrid({
                           );
 
                           // Check whether all prerequisites are met
-                          const prereqStatus = checkPrerequisitesMet(course.code, student.courseMap, prerequisiteLinks);
-                          const courseSeason = getCourseSeason(course.code);
-                          const isEligibleSeason = isCourseEligibleForSeason(course.code, activeSeason);
+                          const prereqStatus = checkPrerequisitesMet(course.code, student.courseMap, prerequisiteLinks, studentProg);
+                          const courseSeason = getCourseSeason(course.code, studentProg);
+                          const isEligibleSeason = isCourseEligibleForSeason(course.code, activeSeason, studentProg);
                           const isSeasonBlocked = !isPassed && !isSelected && !isEligibleSeason;
                           const isPrereqBlocked = !isPassed && !isSelected && !prereqStatus.canTake;
                           const isLimitBlocked = !isPassed && !isSelected && isLimitReached;
@@ -859,9 +971,9 @@ export default function DegreeGrid({
             {activeCourseModal.statusInfo.status !== 'passed' && (
               (() => {
                 const isSelected = selectedCodesSet.has(normalizeCode(activeCourseModal.course.code));
-                const prereqStatus = checkPrerequisitesMet(activeCourseModal.course.code, student.courseMap, prerequisiteLinks);
-                const modalCourseSeason = getCourseSeason(activeCourseModal.course.code);
-                const isEligibleSeason = isCourseEligibleForSeason(activeCourseModal.course.code, activeSeason);
+                const prereqStatus = checkPrerequisitesMet(activeCourseModal.course.code, student.courseMap, prerequisiteLinks, studentProg);
+                const modalCourseSeason = getCourseSeason(activeCourseModal.course.code, studentProg);
+                const isEligibleSeason = isCourseEligibleForSeason(activeCourseModal.course.code, activeSeason, studentProg);
                 const isSeasonBlocked = !isSelected && !isEligibleSeason;
                 const isPrereqBlocked = !isSelected && !prereqStatus.canTake;
                 const isLimitBlocked = !isSelected && isLimitReached;
@@ -1107,7 +1219,7 @@ export default function DegreeGrid({
                           <option value="">+ Add Prerequisite to {activeCourseModal.course.code}...</option>
                           {(() => {
                             const existingNorms = new Set(reqs.map(normalizeCode));
-                            return ALL_COURSES
+                            return allCourses
                               .filter(c => normalizeCode(c.code) !== currentNorm && !existingNorms.has(normalizeCode(c.code)))
                               .map(c => (
                                 <option key={c.code} value={c.code}>

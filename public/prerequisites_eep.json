@@ -1,0 +1,134 @@
+[
+  {
+    "from": "BSC 011",
+    "to": "BSC 012"
+  },
+  {
+    "from": "BSC 031",
+    "to": "BSC 032"
+  },
+  {
+    "from": "BSC 021",
+    "to": "BSC 022"
+  },
+  {
+    "from": "BSC 012",
+    "to": "BSC 111"
+  },
+  {
+    "from": "BSC 022",
+    "to": "MPE 112"
+  },
+  {
+    "from": "BSC 111",
+    "to": "EPM 241"
+  },
+  {
+    "from": "BSC 112",
+    "to": "MPE 231"
+  },
+  {
+    "from": "EPM 111",
+    "to": "EPM 221"
+  },
+  {
+    "from": "MPE 123",
+    "to": "EPM 221"
+  },
+  {
+    "from": "MPE 122",
+    "to": "MPE 241"
+  },
+  {
+    "from": "MPE 112",
+    "to": "MPE 311"
+  },
+  {
+    "from": "MPE 112",
+    "to": "EPM 331"
+  },
+  {
+    "from": "MPE 231",
+    "to": "MPE 232"
+  },
+  {
+    "from": "MPE 232",
+    "to": "EPM 231"
+  },
+  {
+    "from": "MPE 232",
+    "to": "MPE 341"
+  },
+  {
+    "from": "EPM 221",
+    "to": "EPM 222"
+  },
+  {
+    "from": "EPM 222",
+    "to": "EPM 341"
+  },
+  {
+    "from": "EPM 241",
+    "to": "MPE 251"
+  },
+  {
+    "from": "EPM 231",
+    "to": "MPE 451"
+  },
+  {
+    "from": "EPM 331",
+    "to": "EPM 351"
+  },
+  {
+    "from": "EPM 341",
+    "to": "EPM 342"
+  },
+  {
+    "from": "EPM 341",
+    "to": "MPE 351"
+  },
+  {
+    "from": "MPE 341",
+    "to": "MPE 351"
+  },
+  {
+    "from": "MPE 311",
+    "to": "MPE 312"
+  },
+  {
+    "from": "MPE 312",
+    "to": "EPM 411"
+  },
+  {
+    "from": "EPM 342",
+    "to": "EPM 412"
+  },
+  {
+    "from": "MPE 411",
+    "to": "MPE 452"
+  },
+  {
+    "from": "EPM 411",
+    "to": "EPM 431"
+  },
+  {
+    "from": "EPM 412",
+    "to": "MPE 412"
+  },
+  {
+    "from": "BSC 031",
+    "to": "MPE 122"
+  },
+  {
+    "from": "BSC 032",
+    "to": "EPM 111"
+  },
+  {
+    "from": "MPE 122",
+    "to": "MPE 123"
+  },
+  {
+    "from": "PRD 031",
+    "to": "PRD 133"
+  }
+]

@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
-import { ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getRegistrationLimit } from './courseMapping.js';
+import { ALL_COURSES, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getRegistrationLimit, normalizeProgramId, getAllCourses } from './courseMapping.js';
 import { cleanArabicText } from './pdfParser.js';
 
 const SPREADSHEETML_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -153,9 +153,12 @@ export { offsetCellRef, setCellInlineStr, setCellValue, clearCell };
 export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks = PREREQUISITE_LINKS, rowOffset = 0) {
   const { targetLevel, termLabel, termSeason, academicYear } = getStudentTargetLevelAndTerm(student);
 
-  // Helper map for course code -> ALL_COURSES item
+  const isEpp = normalizeProgramId(student?.program) === 'EEP';
+  const progCourses = getAllCourses(isEpp ? 'EEP' : 'AI');
+
+  // Helper map for course code -> program course item
   const courseLookup = new Map();
-  for (const c of ALL_COURSES) {
+  for (const c of progCourses) {
     courseLookup.set(normalizeCode(c.code), c);
     if (c.aliases) {
       for (const a of c.aliases) {
@@ -174,7 +177,7 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
   for (const code of selectedList) {
     const norm = normalizeCode(code);
     const course = courseLookup.get(norm) || { code, name: code, ch: 3, level: -1 };
-    
+
     // Check if course belongs to student's current level
     if (course.level === targetLevel) {
       targetSemesterCourses.push(course);
@@ -251,11 +254,11 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
   }
 
   // D9: Registration Date (optional / current date)
-  const d9Cell = getTargetCell('D9');
-  if (d9Cell) {
-    const today = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY
-    setCellInlineStr(sheetDoc, d9Cell, today);
-  }
+  // const d9Cell = getTargetCell('D9');
+  // if (d9Cell) {
+  //   const today = new Date().toLocaleDateString('en-GB'); // DD/MM/YYYY
+  //   setCellInlineStr(sheetDoc, d9Cell, today);
+  // }
 
   // B10: Semester Season (Fall / Spring)
   const b10Cell = getTargetCell('B10');
@@ -306,7 +309,7 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
   }
 
   // 2. Populate Target Semester Courses (Rows 15-16, extensible to more if needed)
-  const levelRows = [15, 16,17,18,19,20];
+  const levelRows = [15, 16, 17, 18, 19, 20];
   levelRows.forEach((r, idx) => {
     const course = targetSemesterCourses[idx];
     const bCell = getTargetCell(`B${r}`);
@@ -348,7 +351,7 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
   });
 
   // 3. Populate Other Courses (Failed / Previous terms, Rows 23-26)
-  const otherRows = [23, 24,25,26];
+  const otherRows = [23, 24, 25, 26];
   otherRows.forEach((r, idx) => {
     const course = otherCourses[idx];
     const bCell = getTargetCell(`B${r}`);
@@ -440,7 +443,7 @@ export async function generateRegistrationWorkbook(regTemplateBuffer, students, 
   // Prepare workbook.xml
   const workbookXmlStr = await zip.file('xl/workbook.xml').async('text');
   const workbookDoc = parseXml(workbookXmlStr);
-  
+
   // Remove externalReferences tag if present
   const extRefs = workbookDoc.getElementsByTagName('externalReferences')[0];
   if (extRefs) extRefs.parentNode.removeChild(extRefs);

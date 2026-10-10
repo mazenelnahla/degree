@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { X, UserPlus, CheckSquare, Square, Check, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
-import { DEGREE_STRUCTURE, ALL_COURSES, normalizeCode } from '../services/courseMapping.js';
+import React, { useState, useEffect } from 'react';
+import { X, UserPlus, CheckSquare, Square, Check, BookOpen, AlertCircle, Sparkles, Zap } from 'lucide-react';
+import { getDegreeStructure, getAllCourses, getProgram, normalizeCode, normalizeProgramId } from '../services/courseMapping.js';
 
-export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
+export default function AddStudentModal({ isOpen, onClose, onAddStudent, initialProgram = 'AI' }) {
+  const [modalProgram, setModalProgram] = useState(() => normalizeProgramId(initialProgram));
   const [studentName, setStudentName] = useState('');
   const [studentId, setStudentId] = useState('');
   const [aiLevel, setAiLevel] = useState(1);
@@ -12,8 +13,15 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
   const [activeLevelTab, setActiveLevelTab] = useState(0);
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Sync modalProgram when opening with initialProgram
+  useEffect(() => {
+    if (isOpen) {
+      setModalProgram(normalizeProgramId(initialProgram));
+    }
+  }, [isOpen, initialProgram]);
+
   // Close dialog on Escape key
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -25,6 +33,10 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+
+  const degreeStructure = getDegreeStructure(modalProgram);
+  const allCourses = getAllCourses(modalProgram);
+  const isEep = modalProgram === 'EEP';
 
   const handleToggleCourse = (code) => {
     const norm = normalizeCode(code);
@@ -40,7 +52,7 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
   };
 
   const handleSelectLevelCourses = (lvl) => {
-    const lvlConfig = DEGREE_STRUCTURE.find(l => l.level === lvl);
+    const lvlConfig = degreeStructure.find(l => l.level === lvl);
     if (!lvlConfig) return;
     const codesInLevel = lvlConfig.semesters.flatMap(s => s.courses.map(c => normalizeCode(c.code)));
     setSelectedCourses(prev => {
@@ -51,7 +63,7 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
   };
 
   const handleDeselectLevelCourses = (lvl) => {
-    const lvlConfig = DEGREE_STRUCTURE.find(l => l.level === lvl);
+    const lvlConfig = degreeStructure.find(l => l.level === lvl);
     if (!lvlConfig) return;
     const codesInLevel = lvlConfig.semesters.flatMap(s => s.courses.map(c => normalizeCode(c.code)));
     setSelectedCourses(prev => {
@@ -63,6 +75,21 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
 
   const handleClearAllCourses = () => {
     setSelectedCourses(new Set());
+  };
+
+  const handleProgramChange = (newProg) => {
+    if (newProg === modalProgram) return;
+    setModalProgram(newProg);
+    // Keep courses that are common in both curricula (e.g. Level 0 BSC 041, PRD 031, PRD 041, CCE 031)
+    const newProgCourses = getAllCourses(newProg);
+    const newProgNorms = new Set(newProgCourses.map(c => normalizeCode(c.code)));
+    setSelectedCourses(prev => {
+      const filtered = new Set();
+      prev.forEach(code => {
+        if (newProgNorms.has(code)) filtered.add(code);
+      });
+      return filtered;
+    });
   };
 
   const handleSubmit = (e) => {
@@ -82,6 +109,7 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
       aiLevel: parseInt(aiLevel, 10),
       cgpa: cgpa ? parseFloat(cgpa) : 3.0,
       admissionYear: admissionYear.trim() || '2024',
+      program: modalProgram,
       crossedCourseCodes: Array.from(selectedCourses)
     });
 
@@ -95,7 +123,7 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
     onClose();
   };
 
-  const currentLevelData = DEGREE_STRUCTURE.find(l => l.level === activeLevelTab);
+  const currentLevelData = degreeStructure.find(l => l.level === activeLevelTab);
 
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1200 }}>
@@ -171,6 +199,74 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent }) {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', overflowY: 'auto', flex: 1, paddingRight: '0.25rem' }}>
+          {/* Program Curriculum Track Selector */}
+          <div style={{
+            padding: '0.85rem 1.1rem',
+            borderRadius: '12px',
+            background: isEep ? 'rgba(234, 179, 8, 0.08)' : 'rgba(99, 102, 241, 0.08)',
+            border: isEep ? '1px solid rgba(234, 179, 8, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '0.75rem'
+          }}>
+            <div>
+              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                Target Program / Degree Track
+              </div>
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                Subjects list and levels below automatically adapt to this program.
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                type="button"
+                onClick={() => handleProgramChange('AI')}
+                style={{
+                  padding: '0.42rem 0.9rem',
+                  borderRadius: '8px',
+                  fontSize: '0.82rem',
+                  fontWeight: modalProgram === 'AI' ? 700 : 500,
+                  background: modalProgram === 'AI' ? 'linear-gradient(135deg, #6366f1, #06b6d4)' : 'var(--bg-card)',
+                  border: modalProgram === 'AI' ? '1px solid transparent' : '1px solid var(--border-color)',
+                  color: modalProgram === 'AI' ? '#fff' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  boxShadow: modalProgram === 'AI' ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none'
+                }}
+              >
+                <span>🤖 AI Track</span>
+                {modalProgram === 'AI' && <Check size={14} />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleProgramChange('EEP')}
+                style={{
+                  padding: '0.42rem 0.9rem',
+                  borderRadius: '8px',
+                  fontSize: '0.82rem',
+                  fontWeight: modalProgram === 'EEP' ? 700 : 500,
+                  background: modalProgram === 'EEP' ? 'linear-gradient(135deg, #eab308, #f97316)' : 'var(--bg-card)',
+                  border: modalProgram === 'EEP' ? '1px solid transparent' : '1px solid var(--border-color)',
+                  color: modalProgram === 'EEP' ? '#1c1917' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  boxShadow: modalProgram === 'EEP' ? '0 2px 8px rgba(234, 179, 8, 0.3)' : 'none'
+                }}
+              >
+                <span>⚡ EEP Program</span>
+                {modalProgram === 'EEP' && <Check size={14} />}
+              </button>
+            </div>
+          </div>
+
           {/* Basic Info Fields */}
           <div style={{
             display: 'grid',

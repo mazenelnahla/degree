@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
-import { ALL_COURSES, normalizeCode } from './courseMapping.js';
+import { ALL_COURSES, AI_ALL_COURSES, EPP_ALL_COURSES, normalizeCode } from './courseMapping.js';
 import { cleanArabicText } from './pdfParser.js';
 
 function parseXml(xmlStr) {
@@ -23,7 +23,7 @@ function columnLetterToIndex(letters) {
  * @param {ArrayBuffer|Uint8Array} fileBuffer
  * @returns {Promise<Array<Object>>} Array of restored student transcript objects
  */
-export async function parseExportedDegreeWorkbook(fileBuffer) {
+export async function parseExportedDegreeWorkbook(fileBuffer, targetProgram = null) {
   const zip = await JSZip.loadAsync(fileBuffer);
 
   // 1. Read shared strings
@@ -38,6 +38,12 @@ export async function parseExportedDegreeWorkbook(fileBuffer) {
       return tElements.map(t => t.textContent || '').join('');
     });
   }
+
+  const allSharedText = sharedStrings.join(' ').toLowerCase();
+  const isEpp = (targetProgram && String(targetProgram).toUpperCase().includes('EEP')) ||
+    allSharedText.includes('eep') ||
+    allSharedText.includes('energy and electrical power') ||
+    allSharedText.includes('mpe 122');
 
   // 2. Read styles to detect red fills (failed courses) and green fills (selected courses)
   const stylesFile = zip.file('xl/styles.xml');
@@ -124,7 +130,7 @@ export async function parseExportedDegreeWorkbook(fileBuffer) {
       // Dynamically find all student blocks by looking for cells containing "Student's Name"
       const studentBaseRows = [];
       for (const [r, cellObj] of cellMap.entries()) {
-        if (r.startsWith('C') && cellObj.strValue && cellObj.strValue.toLowerCase().includes("student's name")) {
+        if ((r.startsWith('C') || r.startsWith('D')) && cellObj.strValue && cellObj.strValue.toLowerCase().includes("student's name")) {
           const rowNum = parseInt(r.substring(1), 10);
           if (!isNaN(rowNum)) {
             studentBaseRows.push(rowNum);
@@ -135,25 +141,25 @@ export async function parseExportedDegreeWorkbook(fileBuffer) {
 
       if (studentBaseRows.length > 0) {
         studentBaseRows.forEach((baseRow, studentIndex) => {
-          const offset = baseRow - 2;
-          const student = extractStudentFromCells(cellMap, offset, `Student ${studentIndex + 1}`, redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks);
+          const offset = isEpp ? (baseRow - 5) : (baseRow - 2);
+          const student = extractStudentFromCells(cellMap, offset, `Student ${studentIndex + 1}`, redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks, isEpp);
           if (student) {
             students.push(student);
           }
         });
       } else {
-        // Fallback: fixed ROW_BLOCK_SIZE = 55
-        const ROW_BLOCK_SIZE = 55;
+        // Fallback: fixed ROW_BLOCK_SIZE
+        const ROW_BLOCK_SIZE = isEpp ? 120 : 55;
         let offset = 0;
         let studentIndex = 0;
 
         while (true) {
-          const nameRef = `F${2 + offset}`;
+          const nameRef = isEpp ? `G${5 + offset}` : `F${2 + offset}`;
           const nameCell = cellMap.get(nameRef);
           if (!nameCell && offset > 0) {
             let hasCells = false;
-            for (let r = 1; r <= 52; r++) {
-              if (cellMap.has(`C${r + offset}`) || cellMap.has(`W${r + offset}`)) {
+            for (let r = 1; r <= (isEpp ? 117 : 52); r++) {
+              if (cellMap.has(`D${r + offset}`) || cellMap.has(`C${r + offset}`) || cellMap.has(`W${r + offset}`)) {
                 hasCells = true;
                 break;
               }
@@ -161,14 +167,14 @@ export async function parseExportedDegreeWorkbook(fileBuffer) {
             if (!hasCells) break;
           }
 
-          const student = extractStudentFromCells(cellMap, offset, `Student ${studentIndex + 1}`, redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks);
+          const student = extractStudentFromCells(cellMap, offset, `Student ${studentIndex + 1}`, redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks, isEpp);
           if (student) {
             students.push(student);
             studentIndex++;
           }
 
           offset += ROW_BLOCK_SIZE;
-          if (offset > 55 * 200) break;
+          if (offset > ROW_BLOCK_SIZE * 200) break;
         }
       }
     }
@@ -190,7 +196,7 @@ export async function parseExportedDegreeWorkbook(fileBuffer) {
         // Read drawings for checkmark shapes in this tab
         const drawingCheckmarks = await parseDrawingCheckmarks(zip, cleanPath);
 
-        const student = extractStudentFromCells(cellMap, 0, sheetName, redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks);
+        const student = extractStudentFromCells(cellMap, 0, sheetName, redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks, isEpp);
         if (student) {
           students.push(student);
         }
@@ -310,10 +316,14 @@ async function parseDrawingCheckmarks(zip, sheetPath) {
 /**
  * Extracts a complete Student object from a cell map at a specific row offset.
  */
-function extractStudentFromCells(cellMap, offset = 0, defaultSheetName = 'Student', redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks) {
-  // Name at F(2 + offset)
-  const f2Cell = cellMap.get(`F${2 + offset}`);
-  let studentName = cleanArabicText(f2Cell?.strValue || defaultSheetName);
+function extractStudentFromCells(cellMap, offset = 0, defaultSheetName = 'Student', redXfIndices, greenXfIndices, strikeXfIndices, drawingCheckmarks = new Set(), isEpp = false) {
+  // Name
+  const nameRef = isEpp ? `G${5 + offset}` : `F${2 + offset}`;
+  let nameCell = cellMap.get(nameRef);
+  if (!nameCell && isEpp) {
+    nameCell = cellMap.get(`F${5 + offset}`) || cellMap.get(`D${5 + offset}`);
+  }
+  let studentName = cleanArabicText(nameCell?.strValue || defaultSheetName);
 
   // Student ID: Check if studentName has an ID or defaultSheetName has an ID
   let studentId = '';
@@ -324,25 +334,39 @@ function extractStudentFromCells(cellMap, offset = 0, defaultSheetName = 'Studen
     studentId = defaultSheetName.replace(/[^0-9]/g, '') || `ID_${Math.floor(100000 + Math.random() * 900000)}`;
   }
 
-  // CGPA at P(3 + offset)
-  const p3Cell = cellMap.get(`P${3 + offset}`);
-  const parsedCgpa = parseFloat(p3Cell?.strValue || '');
+  // CGPA: P(3 + offset) for AI, Q(6 + offset) for EEP
+  const cgpaRef = isEpp ? `Q${6 + offset}` : `P${3 + offset}`;
+  const cgpaCell = cellMap.get(cgpaRef) || (isEpp ? cellMap.get(`Y${111 + offset}`) : null);
+  const parsedCgpa = parseFloat(cgpaCell?.strValue || '');
   const cgpa = !isNaN(parsedCgpa) ? parsedCgpa : 0.00;
 
-  // Latest semester GPA at K(3 + offset)
-  const k3Cell = cellMap.get(`K${3 + offset}`);
-  const parsedLatestSemGpa = parseFloat(k3Cell?.strValue || '');
+  // Latest semester GPA: K(3 + offset) for AI, L(6 + offset) for EEP
+  const semGpaRef = isEpp ? `L${6 + offset}` : `K${3 + offset}`;
+  const semGpaCell = cellMap.get(semGpaRef);
+  const parsedLatestSemGpa = parseFloat(semGpaCell?.strValue || '');
   const latestSemesterGpa = !isNaN(parsedLatestSemGpa) ? parsedLatestSemGpa : null;
 
-  // AI Level at D(1 + offset)
-  const d1Cell = cellMap.get(`D${1 + offset}`);
-  const d1Str = (d1Cell?.strValue || '').toUpperCase();
-  const levelMatch = d1Str.match(/(\d+)/);
+  // Level at D(1 + offset) for AI, D(4 + offset) for EEP
+  const levelRef = isEpp ? `D${4 + offset}` : `D${1 + offset}`;
+  const levelCell = cellMap.get(levelRef);
+  const levelStr = (levelCell?.strValue || '').toUpperCase();
+  const levelMatch = levelStr.match(/(\d+)/);
   const aiLevel = levelMatch ? parseInt(levelMatch[1], 10) : 1;
 
-  // GPA table records (W7, W11, W16, W20, W25, W30, W34, W38, W43, W47)
+  // GPA table records
   const levelGpas = [];
-  const gpaCellList = [
+  const gpaCellList = isEpp ? [
+    { level: 0, gpaCell: 'Y10' },
+    { level: 0, gpaCell: 'Y20' },
+    { level: 1, gpaCell: 'Y30' },
+    { level: 1, gpaCell: 'Y40' },
+    { level: 2, gpaCell: 'Y50' },
+    { level: 2, gpaCell: 'Y60' },
+    { level: 3, gpaCell: 'Y70' },
+    { level: 3, gpaCell: 'Y80' },
+    { level: 4, gpaCell: 'Y90' },
+    { level: 4, gpaCell: 'Y100' }
+  ] : [
     { level: 0, gpaCell: 'W7' },
     { level: 0, gpaCell: 'W11' },
     { level: 1, gpaCell: 'W16' },
@@ -376,7 +400,8 @@ function extractStudentFromCells(cellMap, offset = 0, defaultSheetName = 'Studen
   let passedCount = 0;
   let failedCount = 0;
 
-  for (const course of ALL_COURSES) {
+  const coursesList = isEpp ? EPP_ALL_COURSES : AI_ALL_COURSES;
+  for (const course of coursesList) {
     const normCode = normalizeCode(course.code);
     const codeMatch = course.codeCell.match(/^([A-Z]+)(\d+)$/);
     const targetRow = parseInt(codeMatch[2], 10) + offset;
@@ -447,7 +472,8 @@ function extractStudentFromCells(cellMap, offset = 0, defaultSheetName = 'Studen
   }
 
   // If no courses were detected in this block, skip
-  if (passedCount === 0 && failedCount === 0 && selectedCourseCodes.length === 0 && !cellMap.has(`F${2 + offset}`)) {
+  const checkNameCell = isEpp ? `G${5 + offset}` : `F${2 + offset}`;
+  if (passedCount === 0 && failedCount === 0 && selectedCourseCodes.length === 0 && !cellMap.has(checkNameCell)) {
     return null;
   }
 
@@ -460,7 +486,8 @@ function extractStudentFromCells(cellMap, offset = 0, defaultSheetName = 'Studen
     admissionYear: studentId.length >= 4 ? studentId.substring(0, 4) : null,
     registeredHours: null,
     achievedHours: passedCount * 3,
-    program: 'Artificial Intelligence',
+    program: isEpp ? 'EEP' : 'Artificial Intelligence',
+    programName: isEpp ? 'Energy and Electrical Power' : 'Artificial Intelligence',
     rawCourses: Object.values(courseMap),
     courseMap,
     passedCount,
