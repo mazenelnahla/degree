@@ -293,7 +293,9 @@ export function populateRegistrationSheet(sheetDoc, student, prerequisiteLinks =
   const b11Cell = getTargetCell('B11');
   if (b11Cell) {
     const regLimit = getRegistrationLimit(student);
-    if (regLimit.tier === 'strict_warning') {
+    if (regLimit.isOverridden) {
+      setCellInlineStr(sheetDoc, b11Cell, `GPA Limit Paused: Max 6 Subjects Allowed (Override)`);
+    } else if (regLimit.tier === 'strict_warning') {
       setCellInlineStr(sheetDoc, b11Cell, `Warning (Sem GPA < 1.7): Max 4 Subjects Allowed`);
     } else if (regLimit.tier === 'academic_warning') {
       setCellInlineStr(sheetDoc, b11Cell, `Warning (CGPA < 2.0): Max 5 Subjects Allowed`);

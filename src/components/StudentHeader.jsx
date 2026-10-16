@@ -1,8 +1,8 @@
 import React from 'react';
-import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert, Calendar, Trash2, Zap } from 'lucide-react';
+import { User, Award, AlertTriangle, CheckCircle2, XCircle, BookOpen, Clock, CheckSquare, ShieldCheck, ShieldAlert, Calendar, Trash2, Zap, Unlock, Lock } from 'lucide-react';
 import { getRegistrationLimit, getStudentRegistrationSeason, normalizeProgramId } from '../services/courseMapping.js';
 
-export default function StudentHeader({ student, onDeleteStudent, onOpenCrossModal }) {
+export default function StudentHeader({ student, onDeleteStudent, onOpenCrossModal, onToggleUnlockGpaLimit }) {
   if (!student) return null;
 
   const isEep = normalizeProgramId(student?.program) === 'EEP';
@@ -160,7 +160,7 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
           </div>
 
           {/* Quick Metrics */}
-          <div style={{ display: 'flex', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
             {/* Passed */}
             <div style={{
               padding: '0.6rem 1rem',
@@ -249,45 +249,126 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
               </div>
             </div>
 
-            {/* GPA Registration Subject Limit */}
+            {/* GPA Registration Subject Limit & Pause GPA Toggle */}
             {(() => {
               const regLimit = getRegistrationLimit(student);
-              const isWarning = regLimit.maxCourses < 6;
+              const isOverridden = !!student.unlockGpaLimit;
+              const isWarning = regLimit.naturalLimit < 6 && !isOverridden;
               return (
                 <div
-                  title={regLimit.ruleText}
                   style={{
-                    padding: '0.6rem 1rem',
-                    borderRadius: '12px',
-                    background: regLimit.tier === 'strict_warning'
-                      ? 'rgba(239, 68, 68, 0.12)'
-                      : regLimit.tier === 'academic_warning'
-                      ? 'rgba(245, 158, 11, 0.12)'
-                      : 'rgba(16, 185, 129, 0.12)',
-                    border: `1px solid ${regLimit.tier === 'strict_warning' ? 'rgba(239, 68, 68, 0.35)' : regLimit.tier === 'academic_warning' ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '0.6rem'
+                    gap: '0.6rem',
+                    flexWrap: 'wrap'
                   }}
                 >
-                  {isWarning ? (
-                    <ShieldAlert size={18} style={{ color: regLimit.tier === 'strict_warning' ? '#f43f5e' : '#f59e0b' }} />
-                  ) : (
-                    <ShieldCheck size={18} style={{ color: '#10b981' }} />
-                  )}
-                  <div>
-                    <div style={{
-                      fontSize: '1.1rem',
-                      fontWeight: 800,
-                      color: regLimit.tier === 'strict_warning' ? '#f43f5e' : regLimit.tier === 'academic_warning' ? '#f59e0b' : '#10b981',
-                      lineHeight: 1
-                    }}>
-                      {regLimit.maxCourses} Subjects
-                    </div>
-                    <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
-                      Registration Limit
+                  <div
+                    title={regLimit.ruleText}
+                    style={{
+                      padding: '0.6rem 1rem',
+                      borderRadius: '12px',
+                      background: isOverridden
+                        ? 'rgba(56, 189, 248, 0.12)'
+                        : regLimit.tier === 'strict_warning'
+                        ? 'rgba(239, 68, 68, 0.12)'
+                        : regLimit.tier === 'academic_warning'
+                        ? 'rgba(245, 158, 11, 0.12)'
+                        : 'rgba(16, 185, 129, 0.12)',
+                      border: `1px solid ${
+                        isOverridden
+                          ? 'rgba(56, 189, 248, 0.45)'
+                          : regLimit.tier === 'strict_warning'
+                          ? 'rgba(239, 68, 68, 0.35)'
+                          : regLimit.tier === 'academic_warning'
+                          ? 'rgba(245, 158, 11, 0.35)'
+                          : 'rgba(16, 185, 129, 0.35)'
+                      }`,
+                      boxShadow: isOverridden ? '0 0 16px rgba(56, 189, 248, 0.2)' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.6rem'
+                    }}
+                  >
+                    {isOverridden ? (
+                      <Unlock size={18} style={{ color: '#38bdf8' }} />
+                    ) : isWarning ? (
+                      <ShieldAlert size={18} style={{ color: regLimit.tier === 'strict_warning' ? '#f43f5e' : '#f59e0b' }} />
+                    ) : (
+                      <ShieldCheck size={18} style={{ color: '#10b981' }} />
+                    )}
+                    <div>
+                      <div style={{
+                        fontSize: '1.1rem',
+                        fontWeight: 800,
+                        color: isOverridden
+                          ? '#38bdf8'
+                          : regLimit.tier === 'strict_warning'
+                          ? '#f43f5e'
+                          : regLimit.tier === 'academic_warning'
+                          ? '#f59e0b'
+                          : '#10b981',
+                        lineHeight: 1
+                      }}>
+                        {regLimit.maxCourses} Subjects
+                      </div>
+                      <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
+                        {isOverridden ? 'GPA Paused (6 Max)' : 'Registration Limit'}
+                      </div>
                     </div>
                   </div>
+
+                  {onToggleUnlockGpaLimit && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleUnlockGpaLimit()}
+                      className="btn"
+                      title={
+                        isOverridden
+                          ? `GPA limit is currently paused. Click to resume GPA limit (${regLimit.naturalLimit} subjects) for ${student.studentName || 'this student'}`
+                          : `Pause selecting based on GPA and unlock 6 subjects for ${student.studentName || 'this student'}`
+                      }
+                      style={{
+                        padding: '0.6rem 0.9rem',
+                        borderRadius: '12px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.45rem',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        background: isOverridden
+                          ? 'rgba(56, 189, 248, 0.2)'
+                          : isWarning
+                          ? 'rgba(56, 189, 248, 0.12)'
+                          : 'rgba(255, 255, 255, 0.05)',
+                        border: isOverridden
+                          ? '1px solid rgba(56, 189, 248, 0.55)'
+                          : isWarning
+                          ? '1px solid rgba(56, 189, 248, 0.45)'
+                          : '1px solid var(--border-color)',
+                        color: isOverridden
+                          ? '#38bdf8'
+                          : isWarning
+                          ? '#38bdf8'
+                          : 'var(--text-secondary)',
+                        boxShadow: isOverridden ? '0 0 14px rgba(56, 189, 248, 0.25)' : 'none'
+                      }}
+                    >
+                      {isOverridden ? (
+                        <>
+                          <Lock size={14} />
+                          <span>Resume GPA Limit</span>
+                        </>
+                      ) : (
+                        <>
+                          <Unlock size={14} style={{ color: '#38bdf8' }} />
+                          <span>Pause GPA (Unlock 6)</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               );
             })()}
@@ -373,6 +454,11 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
           <span>
             <strong>Academic Warning Notice:</strong> CGPA ({student.cgpa.toFixed(2)}) is below 2.00. 
             <strong> {student.failedCount} courses</strong> with 0.00 value remain uncrossed and must be retaken for degree completion.
+            {student.unlockGpaLimit && (
+              <span style={{ marginLeft: '0.5rem', color: '#38bdf8', fontWeight: 700 }}>
+                • GPA registration limit paused: 6 subjects unlocked.
+              </span>
+            )}
           </span>
         </div>
       )}

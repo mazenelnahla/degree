@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { getDegreeStructure, getAllCourses, normalizeProgramId, PREREQUISITE_LINKS, normalizeCode, getCourseRequires, getCourseUnlocks, checkPrerequisitesMet, getRegistrationLimit, getCourseSeason, getStudentRegistrationSeason, isCourseEligibleForSeason, isAllSeasonCourse } from '../services/courseMapping.js';
-import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, AlertTriangle, ShieldAlert, Calendar } from 'lucide-react';
+import { CheckCircle2, XCircle, Search, Filter, Info, ChevronRight, X, ArrowRight, CornerDownRight, GitFork, CheckSquare, Square, Check, RefreshCw, Edit3, Plus, Trash2, Lock, Unlock, AlertTriangle, ShieldAlert, Calendar } from 'lucide-react';
 import CrossSubjectsModal from './CrossSubjectsModal.jsx';
 
 export default function DegreeGrid({
@@ -17,7 +17,8 @@ export default function DegreeGrid({
   onClearSelected,
   onSelectSemesterCourses,
   onDeselectSemesterCourses,
-  onUpdateSemesterGpa
+  onUpdateSemesterGpa,
+  onToggleUnlockGpaLimit
 }) {
   const [selectedLevel, setSelectedLevel] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all'); // all, selected, passed, failed, not_taken
@@ -245,28 +246,75 @@ export default function DegreeGrid({
             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
               Selected: <strong style={{ color: selectedCodesSet.size >= regLimit.maxCourses ? '#f59e0b' : selectedCodesSet.size > 0 ? '#10b981' : 'var(--text-muted)' }}>
                 {selectedCodesSet.size} / {regLimit.maxCourses}
-              </strong> subjects allowed
+              </strong> subjects {regLimit.isOverridden ? '(GPA Paused)' : 'allowed'}
             </span>
 
             <span style={{
               fontSize: '0.72rem',
               padding: '0.15rem 0.55rem',
               borderRadius: '6px',
-              background: regLimit.tier === 'strict_warning'
+              background: regLimit.isOverridden
+                ? 'rgba(56, 189, 248, 0.15)'
+                : regLimit.tier === 'strict_warning'
                 ? 'rgba(239, 68, 68, 0.15)'
                 : regLimit.tier === 'academic_warning'
                 ? 'rgba(245, 158, 11, 0.15)'
                 : 'rgba(16, 185, 129, 0.15)',
-              color: regLimit.tier === 'strict_warning'
+              color: regLimit.isOverridden
+                ? '#38bdf8'
+                : regLimit.tier === 'strict_warning'
                 ? '#f87171'
                 : regLimit.tier === 'academic_warning'
                 ? '#fbbf24'
                 : '#34d399',
-              border: `1px solid ${regLimit.tier === 'strict_warning' ? 'rgba(239, 68, 68, 0.3)' : regLimit.tier === 'academic_warning' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)'}`,
+              border: `1px solid ${
+                regLimit.isOverridden
+                  ? 'rgba(56, 189, 248, 0.35)'
+                  : regLimit.tier === 'strict_warning'
+                  ? 'rgba(239, 68, 68, 0.3)'
+                  : regLimit.tier === 'academic_warning'
+                  ? 'rgba(245, 158, 11, 0.3)'
+                  : 'rgba(16, 185, 129, 0.3)'
+              }`,
               fontWeight: 600
             }}>
-              Max {regLimit.maxCourses}
+              {regLimit.isOverridden ? 'Max 6 (GPA Paused)' : `Max ${regLimit.maxCourses}`}
             </span>
+
+            {/* Quick Toggle Button in Grid Action Bar */}
+            {onToggleUnlockGpaLimit && (
+              <button
+                type="button"
+                onClick={() => onToggleUnlockGpaLimit()}
+                className="btn btn-secondary"
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '0.25rem 0.65rem',
+                  borderRadius: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  background: student.unlockGpaLimit ? 'rgba(56, 189, 248, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                  borderColor: student.unlockGpaLimit ? 'rgba(56, 189, 248, 0.45)' : 'var(--border-color)',
+                  color: student.unlockGpaLimit ? '#38bdf8' : 'var(--text-secondary)'
+                }}
+                title={student.unlockGpaLimit
+                  ? `GPA limit is paused (6 subjects unlocked). Click to resume GPA limit (${regLimit.naturalLimit} subjects).`
+                  : `Pause selecting based on GPA and unlock 6 subjects for this student.`}
+              >
+                {student.unlockGpaLimit ? (
+                  <>
+                    <Lock size={12} />
+                    <span>Resume GPA Limit</span>
+                  </>
+                ) : (
+                  <>
+                    <Unlock size={12} style={{ color: '#38bdf8' }} />
+                    <span>Pause GPA (Unlock 6)</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -1099,6 +1147,28 @@ export default function DegreeGrid({
                           </>
                         )}
                       </button>
+
+                      {isLimitBlocked && !student.unlockGpaLimit && onToggleUnlockGpaLimit && (
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => onToggleUnlockGpaLimit()}
+                          style={{
+                            fontSize: '0.78rem',
+                            padding: '0.4rem 0.75rem',
+                            background: 'rgba(56, 189, 248, 0.18)',
+                            borderColor: 'rgba(56, 189, 248, 0.45)',
+                            color: '#38bdf8',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem'
+                          }}
+                          title="Pause GPA limit and unlock 6 subjects for this student"
+                        >
+                          <Unlock size={13} />
+                          <span>Unlock 6 Subjects</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

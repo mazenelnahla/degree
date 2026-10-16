@@ -498,6 +498,7 @@ function extractStudentFromCells(cellMap, offset = 0, defaultSheetName = 'Studen
     regularSemesters: [],
     summerSemesters: [],
     levelGpas,
-    selectedCourseCodes
+    selectedCourseCodes,
+    unlockGpaLimit: false
   };
 }

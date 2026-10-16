@@ -470,7 +470,8 @@ export default function App() {
       summerSemesters: [],
       levelGpas: [],
       latestSemesterGpa: null,
-      selectedCourseCodes: []
+      selectedCourseCodes: [],
+      unlockGpaLimit: false
     };
 
     setStudents(prev => {
@@ -487,7 +488,8 @@ export default function App() {
           courseMap: mergedCourseMap,
           passedCount: updatedPassed,
           achievedHours: updatedAchieved,
-          selectedCourseCodes: existing.selectedCourseCodes || []
+          selectedCourseCodes: existing.selectedCourseCodes || [],
+          unlockGpaLimit: existing.unlockGpaLimit || false
         };
         setActiveStudentIndex(existingIdx);
       } else {
@@ -735,7 +737,7 @@ export default function App() {
       });
     });
 
-    let msg = `Selected ${eligibleCount} failed ${activeSeason} course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    let msg = `Selected ${eligibleCount} failed ${activeSeason} course(s) (Limit: ${regLimit.maxCourses} subjects${regLimit.isOverridden ? ' - GPA Paused' : ''}).`;
     if (blockedSeasonCount > 0) {
       msg += ` ${blockedSeasonCount} skipped (not ${activeSeason}).`;
     }
@@ -811,7 +813,7 @@ export default function App() {
       });
     });
 
-    let msg = `Selected ${eligibleCount} pending ${activeSeason} course(s) (Limit: ${regLimit.maxCourses} subjects).`;
+    let msg = `Selected ${eligibleCount} pending ${activeSeason} course(s) (Limit: ${regLimit.maxCourses} subjects${regLimit.isOverridden ? ' - GPA Paused' : ''}).`;
     if (blockedSeasonCount > 0) {
       msg += ` ${blockedSeasonCount} skipped (not ${activeSeason}).`;
     }
@@ -1024,6 +1026,29 @@ export default function App() {
 
     const semLabel = semester === 1 ? 'Fall' : 'Spring';
     setStatusMessage(`Updated Level ${level} ${semLabel} GPA (${targetCell}) to ${newGpa !== '' && newGpa !== null && !isNaN(newGpa) ? parseFloat(newGpa).toFixed(2) : 'Cleared'}.`);
+  };
+
+  // Toggle pausing GPA-based course selection limit and unlocking 6 subjects for a student
+  const handleToggleUnlockGpaLimit = (targetIndex = activeStudentIndex) => {
+    const targetStudent = students[targetIndex];
+    if (!targetStudent) return;
+
+    const willBeUnlocked = !targetStudent.unlockGpaLimit;
+
+    setStudents(prev => {
+      return prev.map((s, idx) => {
+        if (idx !== targetIndex) return s;
+        return { ...s, unlockGpaLimit: willBeUnlocked };
+      });
+    });
+
+    const regLimit = getRegistrationLimit(targetStudent);
+    const normalLimit = regLimit.naturalLimit || (regLimit.tier === 'strict_warning' ? 4 : regLimit.tier === 'academic_warning' ? 5 : 6);
+    if (willBeUnlocked) {
+      setStatusMessage(`Paused GPA limit for ${targetStudent.studentName || 'student'}. 6 subjects unlocked for registration!`);
+    } else {
+      setStatusMessage(`Resumed GPA-based registration limit (${normalLimit} subjects) for ${targetStudent.studentName || 'student'}.`);
+    }
   };
 
   const handleExport = async (options, mode = 'multi') => {
@@ -1422,6 +1447,7 @@ export default function App() {
               student={activeStudent}
               onDeleteStudent={() => handleDeleteStudent(activeStudentIndex)}
               onOpenCrossModal={() => setIsCrossSubjectsModalOpen(true)}
+              onToggleUnlockGpaLimit={handleToggleUnlockGpaLimit}
             />
 
             {/* Export Controls Bar */}
@@ -1451,6 +1477,7 @@ export default function App() {
               onSelectSemesterCourses={handleSelectSemesterCourses}
               onDeselectSemesterCourses={handleDeselectSemesterCourses}
               onUpdateSemesterGpa={handleUpdateSemesterGpa}
+              onToggleUnlockGpaLimit={handleToggleUnlockGpaLimit}
             />
           </>
         )}

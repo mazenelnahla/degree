@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, CheckCircle2, XCircle, UserPlus, Zap } from 'lucide-react';
+import { User, CheckCircle2, XCircle, UserPlus, Zap, Unlock } from 'lucide-react';
 import { normalizeProgramId } from '../services/courseMapping.js';
 
 export default function StudentTabs({ students, activeIndex, onSelectTab, onOpenAddStudent }) {
@@ -99,6 +99,26 @@ export default function StudentTabs({ students, activeIndex, onSelectTab, onOpen
                 fontWeight: 700
               }}>
                 {student.selectedCourseCodes.length}★
+              </span>
+            )}
+
+            {student.unlockGpaLimit && (
+              <span
+                title="GPA Limit Paused (6 Subjects Unlocked)"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.15rem',
+                  fontSize: '0.68rem',
+                  padding: '0.1rem 0.35rem',
+                  borderRadius: '9999px',
+                  background: 'rgba(56, 189, 248, 0.2)',
+                  color: '#38bdf8',
+                  fontWeight: 700
+                }}
+              >
+                <Unlock size={10} />
+                <span>6</span>
               </span>
             )}
           </button>

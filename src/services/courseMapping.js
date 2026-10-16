@@ -806,7 +806,9 @@ export function getRegistrationLimit(student) {
       ruleText: 'Standard registration (up to 6 subjects allowed)',
       semesterGpa: null,
       cgpa: null,
-      tier: 'standard'
+      tier: 'standard',
+      isOverridden: false,
+      naturalLimit: 6
     };
   }
 
@@ -817,36 +819,53 @@ export function getRegistrationLimit(student) {
         ? Number(student.regularSemesters.at(-1).gpa)
         : null);
 
+  let naturalLimit = 6;
+  let naturalRuleText = '';
+  let naturalTier = 'good_standing';
+
   if (semGpa !== null && semGpa < 1.7) {
-    return {
-      maxCourses: 4,
-      ruleText: `Semester GPA (${semGpa.toFixed(2)} < 1.70) limits registration to 4 subjects`,
-      semesterGpa: semGpa,
-      cgpa,
-      tier: 'strict_warning'
-    };
+    naturalLimit = 4;
+    naturalRuleText = `Semester GPA (${semGpa.toFixed(2)} < 1.70) limits registration to 4 subjects`;
+    naturalTier = 'strict_warning';
+  } else if (cgpa !== null && cgpa < 2.0) {
+    naturalLimit = 5;
+    naturalRuleText = semGpa !== null
+      ? `Semester GPA (${semGpa.toFixed(2)} ≥ 1.70) & CGPA (${cgpa.toFixed(2)} < 2.00) limits registration to 5 subjects`
+      : `CGPA (${cgpa.toFixed(2)} < 2.00) limits registration to 5 subjects`;
+    naturalTier = 'academic_warning';
+  } else {
+    naturalLimit = 6;
+    naturalRuleText = semGpa !== null
+      ? `Semester GPA (${semGpa.toFixed(2)} ≥ 1.70) & CGPA (${cgpa !== null ? cgpa.toFixed(2) : '≥ 2.00'}) allows registering 6 subjects`
+      : `Good standing allows registering up to 6 subjects`;
+    naturalTier = 'good_standing';
   }
 
-  if (cgpa !== null && cgpa < 2.0) {
+  // If GPA restriction is paused for this individual student, unlock 6 subjects
+  if (student.unlockGpaLimit) {
     return {
-      maxCourses: 5,
-      ruleText: semGpa !== null
-        ? `Semester GPA (${semGpa.toFixed(2)} ≥ 1.70) & CGPA (${cgpa.toFixed(2)} < 2.00) limits registration to 5 subjects`
-        : `CGPA (${cgpa.toFixed(2)} < 2.00) limits registration to 5 subjects`,
+      maxCourses: 6,
+      ruleText: `GPA restriction paused (6 subjects unlocked for registration. Natural GPA limit was ${naturalLimit} subjects).`,
       semesterGpa: semGpa,
       cgpa,
-      tier: 'academic_warning'
+      tier: 'overridden',
+      isOverridden: true,
+      naturalLimit,
+      naturalRuleText,
+      naturalTier
     };
   }
 
   return {
-    maxCourses: 6,
-    ruleText: semGpa !== null
-      ? `Semester GPA (${semGpa.toFixed(2)} ≥ 1.70) & CGPA (${cgpa !== null ? cgpa.toFixed(2) : '≥ 2.00'}) allows registering 6 subjects`
-      : `Good standing allows registering up to 6 subjects`,
+    maxCourses: naturalLimit,
+    ruleText: naturalRuleText,
     semesterGpa: semGpa,
     cgpa,
-    tier: 'good_standing'
+    tier: naturalTier,
+    isOverridden: false,
+    naturalLimit,
+    naturalRuleText,
+    naturalTier
   };
 }
 
