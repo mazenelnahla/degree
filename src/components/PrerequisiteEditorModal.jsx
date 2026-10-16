@@ -219,14 +219,12 @@ export default function PrerequisiteEditorModal({
               width: '40px',
               height: '40px',
               borderRadius: '10px',
-              background: selectedProgram === 'EEP'
-                ? 'linear-gradient(135deg, #eab308, #f97316)'
-                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              background: selectedProgram === 'EEP' ? '#d97706' : '#2563eb',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: selectedProgram === 'EEP' ? '#1c1917' : 'white',
-              boxShadow: selectedProgram === 'EEP' ? '0 4px 12px rgba(234, 179, 8, 0.3)' : '0 4px 12px rgba(99, 102, 241, 0.3)'
+              color: 'white',
+              boxShadow: 'var(--shadow-sm)'
             }}>
               {selectedProgram === 'EEP' ? <Zap size={22} /> : <GitFork size={22} />}
             </div>
@@ -245,13 +243,13 @@ export default function PrerequisiteEditorModal({
                       borderRadius: '6px',
                       fontSize: '0.75rem',
                       fontWeight: selectedProgram === 'AI' ? 700 : 500,
-                      background: selectedProgram === 'AI' ? 'rgba(99, 102, 241, 0.25)' : 'transparent',
-                      border: selectedProgram === 'AI' ? '1px solid #6366f1' : '1px solid var(--border-color)',
-                      color: selectedProgram === 'AI' ? '#c7d2fe' : 'var(--text-muted)',
+                      background: selectedProgram === 'AI' ? '#2563eb' : 'transparent',
+                      border: selectedProgram === 'AI' ? '1px solid #1d4ed8' : '1px solid var(--border-color)',
+                      color: selectedProgram === 'AI' ? '#ffffff' : 'var(--text-muted)',
                       cursor: 'pointer'
                     }}
                   >
-                    🤖 AI Track
+                    AI Track
                   </button>
                   <button
                     type="button"
@@ -261,13 +259,13 @@ export default function PrerequisiteEditorModal({
                       borderRadius: '6px',
                       fontSize: '0.75rem',
                       fontWeight: selectedProgram === 'EEP' ? 700 : 500,
-                      background: selectedProgram === 'EEP' ? 'rgba(234, 179, 8, 0.25)' : 'transparent',
-                      border: selectedProgram === 'EEP' ? '1px solid #eab308' : '1px solid var(--border-color)',
-                      color: selectedProgram === 'EEP' ? '#fde047' : 'var(--text-muted)',
+                      background: selectedProgram === 'EEP' ? '#d97706' : 'transparent',
+                      border: selectedProgram === 'EEP' ? '1px solid #b45309' : '1px solid var(--border-color)',
+                      color: selectedProgram === 'EEP' ? '#ffffff' : 'var(--text-muted)',
                       cursor: 'pointer'
                     }}
                   >
-                    ⚡ EEP Program
+                    EEP Program
                   </button>
                 </div>
               </div>
@@ -437,11 +435,12 @@ export default function PrerequisiteEditorModal({
             <div style={{
               padding: '1.1rem 1.25rem',
               borderRadius: '12px',
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.04))',
-              border: '1px solid rgba(99, 102, 241, 0.25)',
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'space-between'
+              justifyContent: 'space-between',
+              boxShadow: 'var(--shadow-sm)'
             }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>

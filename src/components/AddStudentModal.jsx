@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, CheckSquare, Square, Check, BookOpen, AlertCircle, Sparkles, Zap } from 'lucide-react';
+import { X, UserPlus, CheckSquare, Square, Check, BookOpen, AlertCircle, Cpu, Zap } from 'lucide-react';
 import { getDegreeStructure, getAllCourses, getProgram, normalizeCode, normalizeProgramId } from '../services/courseMapping.js';
 
 export default function AddStudentModal({ isOpen, onClose, onAddStudent, initialProgram = 'AI' }) {
@@ -147,17 +147,17 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent, initial
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{
-              width: '42px',
-              height: '42px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+              width: '40px',
+              height: '40px',
+              borderRadius: '10px',
+              background: isEep ? '#d97706' : '#2563eb',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#fff',
-              boxShadow: '0 4px 12px rgba(99, 102, 241, 0.35)'
+              boxShadow: 'var(--shadow-sm)'
             }}>
-              <UserPlus size={22} />
+              <UserPlus size={20} />
             </div>
             <div>
               <h2 id="dialog-add-student-title" style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, letterSpacing: '-0.02em' }}>
@@ -229,17 +229,18 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent, initial
                   borderRadius: '8px',
                   fontSize: '0.82rem',
                   fontWeight: modalProgram === 'AI' ? 700 : 500,
-                  background: modalProgram === 'AI' ? 'linear-gradient(135deg, #6366f1, #06b6d4)' : 'var(--bg-card)',
-                  border: modalProgram === 'AI' ? '1px solid transparent' : '1px solid var(--border-color)',
-                  color: modalProgram === 'AI' ? '#fff' : 'var(--text-secondary)',
+                  background: modalProgram === 'AI' ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-card)',
+                  border: modalProgram === 'AI' ? '1px solid #2563eb' : '1px solid var(--border-color)',
+                  color: modalProgram === 'AI' ? '#2563eb' : 'var(--text-secondary)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.4rem',
-                  boxShadow: modalProgram === 'AI' ? '0 2px 8px rgba(99, 102, 241, 0.3)' : 'none'
+                  boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                <span>🤖 AI Track</span>
+                <Cpu size={14} />
+                <span>AI Track</span>
                 {modalProgram === 'AI' && <Check size={14} />}
               </button>
 
@@ -251,17 +252,18 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent, initial
                   borderRadius: '8px',
                   fontSize: '0.82rem',
                   fontWeight: modalProgram === 'EEP' ? 700 : 500,
-                  background: modalProgram === 'EEP' ? 'linear-gradient(135deg, #eab308, #f97316)' : 'var(--bg-card)',
-                  border: modalProgram === 'EEP' ? '1px solid transparent' : '1px solid var(--border-color)',
-                  color: modalProgram === 'EEP' ? '#1c1917' : 'var(--text-secondary)',
+                  background: modalProgram === 'EEP' ? 'rgba(217, 119, 6, 0.15)' : 'var(--bg-card)',
+                  border: modalProgram === 'EEP' ? '1px solid #d97706' : '1px solid var(--border-color)',
+                  color: modalProgram === 'EEP' ? '#d97706' : 'var(--text-secondary)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.4rem',
-                  boxShadow: modalProgram === 'EEP' ? '0 2px 8px rgba(234, 179, 8, 0.3)' : 'none'
+                  boxShadow: 'var(--shadow-sm)'
                 }}
               >
-                <span>⚡ EEP Program</span>
+                <Zap size={14} />
+                <span>EEP Program</span>
                 {modalProgram === 'EEP' && <Check size={14} />}
               </button>
             </div>
@@ -597,7 +599,8 @@ export default function AddStudentModal({ isOpen, onClose, onAddStudent, initial
               style={{
                 padding: '0.55rem 1.5rem',
                 fontSize: '0.85rem',
-                background: 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                background: isEep ? '#d97706' : '#2563eb',
+                borderColor: isEep ? '#b45309' : '#1d4ed8',
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '0.45rem'

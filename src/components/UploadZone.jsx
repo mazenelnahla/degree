@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, FileSpreadsheet, Sparkles, Check, AlertCircle, FolderUp, UserPlus } from 'lucide-react';
+import { Upload, FileText, FileSpreadsheet, Check, AlertCircle, FolderUp, UserPlus, Cpu, Zap } from 'lucide-react';
 
 export default function UploadZone({
   activeProgram = 'AI',
@@ -77,11 +77,9 @@ export default function UploadZone({
       <div style={{
         marginBottom: '1.35rem',
         padding: '1.1rem 1.35rem',
-        borderRadius: '16px',
-        background: isEep
-          ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.08), rgba(249, 115, 22, 0.04))'
-          : 'linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(6, 182, 212, 0.04))',
-        border: isEep ? '1px solid rgba(234, 179, 8, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)',
+        borderRadius: '12px',
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border-color)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -90,18 +88,19 @@ export default function UploadZone({
       }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: isEep ? '#eab308' : '#818cf8' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: isEep ? '#d97706' : '#2563eb' }}>
               Step 1: Select Target Program Before Adding or Reading
             </span>
             <span style={{
               fontSize: '0.7rem',
               fontWeight: 700,
-              padding: '0.1rem 0.5rem',
-              borderRadius: '9999px',
-              background: isEep ? 'rgba(234, 179, 8, 0.2)' : 'rgba(99, 102, 241, 0.2)',
-              color: isEep ? '#fde047' : '#c7d2fe'
+              padding: '0.15rem 0.55rem',
+              borderRadius: '6px',
+              background: isEep ? 'rgba(217, 119, 6, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+              color: isEep ? '#d97706' : '#2563eb',
+              border: isEep ? '1px solid rgba(217, 119, 6, 0.3)' : '1px solid rgba(37, 99, 235, 0.3)'
             }}>
-              Active: {isEep ? '⚡ EEP Program' : '🤖 AI Track'}
+              Active: {isEep ? 'EEP Program' : 'AI Track'}
             </span>
           </div>
           <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
@@ -116,23 +115,23 @@ export default function UploadZone({
             onClick={() => onSelectProgram && onSelectProgram('AI')}
             style={{
               padding: '0.6rem 1.15rem',
-              borderRadius: '12px',
+              borderRadius: '10px',
               fontSize: '0.88rem',
               fontWeight: activeProgram === 'AI' ? 700 : 500,
               background: activeProgram === 'AI'
-                ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.28), rgba(6, 182, 212, 0.28))'
+                ? 'rgba(37, 99, 235, 0.12)'
                 : 'var(--bg-card)',
-              border: activeProgram === 'AI' ? '2px solid #6366f1' : '1px solid var(--border-color)',
-              color: activeProgram === 'AI' ? '#e0e7ff' : 'var(--text-secondary)',
-              boxShadow: activeProgram === 'AI' ? '0 0 16px rgba(99, 102, 241, 0.35)' : 'none',
+              border: activeProgram === 'AI' ? '2px solid #2563eb' : '1px solid var(--border-color)',
+              color: activeProgram === 'AI' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              boxShadow: 'var(--shadow-sm)',
               display: 'flex',
               alignItems: 'center',
               gap: '0.6rem',
               cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.15s ease'
             }}
           >
-            <span style={{ fontSize: '1.2rem' }}>🤖</span>
+            <Cpu size={20} style={{ color: activeProgram === 'AI' ? '#2563eb' : 'var(--text-muted)' }} />
             <div style={{ textAlign: 'left' }}>
               <div style={{ lineHeight: 1.2 }}>AI Track</div>
               <div style={{ fontSize: '0.7rem', opacity: 0.8, fontWeight: 400 }}>60 Courses • 55 Arrows</div>
@@ -146,23 +145,23 @@ export default function UploadZone({
             onClick={() => onSelectProgram && onSelectProgram('EEP')}
             style={{
               padding: '0.6rem 1.15rem',
-              borderRadius: '12px',
+              borderRadius: '10px',
               fontSize: '0.88rem',
               fontWeight: activeProgram === 'EEP' ? 700 : 500,
               background: activeProgram === 'EEP'
-                ? 'linear-gradient(135deg, rgba(234, 179, 8, 0.28), rgba(249, 115, 22, 0.28))'
+                ? 'rgba(217, 119, 6, 0.12)'
                 : 'var(--bg-card)',
-              border: activeProgram === 'EEP' ? '2px solid #eab308' : '1px solid var(--border-color)',
-              color: activeProgram === 'EEP' ? '#fef08a' : 'var(--text-secondary)',
-              boxShadow: activeProgram === 'EEP' ? '0 0 16px rgba(234, 179, 8, 0.35)' : 'none',
+              border: activeProgram === 'EEP' ? '2px solid #d97706' : '1px solid var(--border-color)',
+              color: activeProgram === 'EEP' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              boxShadow: 'var(--shadow-sm)',
               display: 'flex',
               alignItems: 'center',
               gap: '0.6rem',
               cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              transition: 'all 0.15s ease'
             }}
           >
-            <span style={{ fontSize: '1.2rem' }}>⚡</span>
+            <Zap size={20} style={{ color: activeProgram === 'EEP' ? '#d97706' : 'var(--text-muted)' }} />
             <div style={{ textAlign: 'left' }}>
               <div style={{ lineHeight: 1.2 }}>EEP Program</div>
               <div style={{ fontSize: '0.7rem', opacity: 0.8, fontWeight: 400 }}>61 Courses • 33 Arrows</div>
@@ -237,14 +236,13 @@ export default function UploadZone({
                 style={{
                   fontSize: '0.85rem',
                   padding: '0.5rem 1.25rem',
-                  background: isEep
-                    ? 'linear-gradient(135deg, #eab308, #f97316)'
-                    : 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                  background: isEep ? '#d97706' : '#2563eb',
+                  borderColor: isEep ? '#b45309' : '#1d4ed8',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.4rem',
-                  color: isEep ? '#1c1917' : '#fff',
-                  fontWeight: 700
+                  color: '#fff',
+                  fontWeight: 600
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -423,7 +421,8 @@ export default function UploadZone({
               style={{
                 fontSize: '0.75rem',
                 padding: '0.4rem 0.85rem',
-                background: 'linear-gradient(135deg, #059669, #10b981)',
+                background: '#059669',
+                borderColor: '#047857',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.35rem'

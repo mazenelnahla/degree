@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2, CheckSquare, Sparkles, ClipboardCheck, Save } from 'lucide-react';
+import { Download, Sliders, FileSpreadsheet, Layers, Copy, Loader2, CheckSquare, ClipboardCheck, Save } from 'lucide-react';
 
 export default function ExportControls({
   onExport,
@@ -79,11 +79,12 @@ export default function ExportControls({
             width: '40px',
             height: '40px',
             borderRadius: '10px',
-            background: 'linear-gradient(135deg, #10b981, #059669)',
+            background: '#059669',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#fff'
+            color: '#fff',
+            boxShadow: 'var(--shadow-sm)'
           }}>
             <FileSpreadsheet size={20} />
           </div>
@@ -240,8 +241,9 @@ export default function ExportControls({
               disabled={isExporting}
               style={{
                 padding: '0.65rem 1.25rem',
-                background: 'linear-gradient(135deg, #0ea5e9, #4f46e5)',
-                boxShadow: '0 4px 14px rgba(14, 165, 233, 0.35)',
+                background: '#0284c7',
+                borderColor: '#0369a1',
+                boxShadow: 'var(--shadow-sm)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.45rem',
@@ -252,7 +254,7 @@ export default function ExportControls({
               {isExporting ? (
                 <Loader2 size={17} className="animate-spin" />
               ) : (
-                <Sparkles size={17} />
+                <Layers size={17} />
               )}
               <span>Same Page (Single Sheet)</span>
               <span style={{ fontSize: '0.7rem', opacity: 0.9, transform: openDropdown === 'same' ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
@@ -265,16 +267,15 @@ export default function ExportControls({
                 top: 'calc(100% + 6px)',
                 right: 0,
                 minWidth: '310px',
-                background: 'var(--bg-card, #0f172a)',
-                border: '1px solid var(--border-color, rgba(255,255,255,0.15))',
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
                 borderRadius: '12px',
-                boxShadow: '0 12px 30px rgba(0, 0, 0, 0.55)',
+                boxShadow: 'var(--shadow-lg)',
                 padding: '0.5rem',
                 zIndex: 9999,
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.3rem',
-                backdropFilter: 'blur(16px)'
+                gap: '0.3rem'
               }}>
                 {/* Option A: Tree & Registration in Same Sheet (with page break) */}
                 {onExportCombined && (
@@ -291,19 +292,19 @@ export default function ExportControls({
                       padding: '0.7rem 0.85rem',
                       borderRadius: '8px',
                       fontSize: '0.825rem',
-                      background: 'rgba(14, 165, 233, 0.08)',
-                      border: '1px solid rgba(14, 165, 233, 0.25)',
+                      background: 'rgba(2, 132, 199, 0.08)',
+                      border: '1px solid rgba(2, 132, 199, 0.2)',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.65rem',
                       color: 'var(--text-primary)'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(14, 165, 233, 0.2)'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(14, 165, 233, 0.08)'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(2, 132, 199, 0.15)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(2, 132, 199, 0.08)'}
                   >
-                    <Sparkles size={18} style={{ color: '#38bdf8', flexShrink: 0 }} />
+                    <Layers size={18} style={{ color: '#0284c7', flexShrink: 0 }} />
                     <div>
-                      <div style={{ fontWeight: 700, color: '#38bdf8' }}>Tree &amp; Registration (Same Sheet)</div>
+                      <div style={{ fontWeight: 700, color: '#0284c7' }}>Tree &amp; Registration (Same Sheet)</div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
                         Tree on top + Registration form below with automatic Page Break
                       </div>

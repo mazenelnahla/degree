@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, CheckSquare, Square, Check, BookOpen, AlertCircle, Sparkles, Filter, CheckCircle2 } from 'lucide-react';
+import { X, CheckSquare, Square, Check, BookOpen, AlertCircle, Filter, CheckCircle2 } from 'lucide-react';
 import { getDegreeStructure, getAllCourses, normalizeCode, normalizeProgramId } from '../services/courseMapping.js';
 
 export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleCourseCrossed, onBulkCrossCourses }) {
@@ -59,7 +59,7 @@ export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleC
           display: 'flex',
           flexDirection: 'column',
           padding: '1.75rem',
-          borderRadius: '20px'
+          borderRadius: '12px'
         }}
       >
         {/* Header */}
@@ -68,15 +68,13 @@ export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleC
             <div style={{
               width: '40px',
               height: '40px',
-              borderRadius: '12px',
-              background: isEep
-                ? 'linear-gradient(135deg, #eab308, #f97316)'
-                : 'linear-gradient(135deg, #10b981, #06b6d4)',
+              borderRadius: '10px',
+              background: isEep ? '#d97706' : '#059669',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: isEep ? '#1c1917' : '#fff',
-              boxShadow: isEep ? '0 4px 12px rgba(234, 179, 8, 0.3)' : '0 4px 12px rgba(16, 185, 129, 0.3)'
+              color: '#fff',
+              boxShadow: 'var(--shadow-sm)'
             }}>
               <CheckCircle2 size={22} />
             </div>
@@ -91,13 +89,13 @@ export default function CrossSubjectsModal({ isOpen, onClose, student, onToggleC
                 <span style={{
                   fontSize: '0.72rem',
                   fontWeight: 700,
-                  padding: '0.12rem 0.5rem',
-                  borderRadius: '9999px',
-                  background: isEep ? 'rgba(234, 179, 8, 0.18)' : 'rgba(99, 102, 241, 0.18)',
-                  color: isEep ? '#fde047' : '#c7d2fe',
-                  border: isEep ? '1px solid rgba(234, 179, 8, 0.35)' : '1px solid rgba(99, 102, 241, 0.35)'
+                  padding: '0.15rem 0.55rem',
+                  borderRadius: '6px',
+                  background: isEep ? 'rgba(217, 119, 6, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+                  color: isEep ? '#d97706' : '#2563eb',
+                  border: isEep ? '1px solid rgba(217, 119, 6, 0.3)' : '1px solid rgba(37, 99, 235, 0.3)'
                 }}>
-                  {isEep ? '⚡ EEP Program' : '🤖 AI Track'}
+                  {isEep ? 'EEP Program' : 'AI Track'}
                 </span>
               </div>
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0.15rem 0 0' }}>

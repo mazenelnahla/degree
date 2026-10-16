@@ -37,7 +37,7 @@ import ExportControls from './components/ExportControls.jsx';
 import PrerequisiteEditorModal from './components/PrerequisiteEditorModal.jsx';
 import AddStudentModal from './components/AddStudentModal.jsx';
 import CrossSubjectsModal from './components/CrossSubjectsModal.jsx';
-import { GraduationCap, Sun, Moon, Sparkles, RefreshCw, FileText, GitFork, Save, FolderUp, UserPlus, CheckSquare, Zap } from 'lucide-react';
+import { GraduationCap, Sun, Moon, Info, RefreshCw, FileText, GitFork, Save, FolderUp, UserPlus, CheckSquare, Zap, Cpu } from 'lucide-react';
 
 export default function App() {
   const [activeProgram, setActiveProgram] = useState('AI');
@@ -1247,26 +1247,22 @@ export default function App() {
   const currentTemplateName = customTemplateName || (activeProgram === 'EEP' ? 'EPP Template.xlsx' : 'template.xlsx');
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', width: '100%' }}>
       {/* Top Navigation Bar */}
       <header className="app-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
-            background: activeProgram === 'EEP'
-              ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
-              : 'linear-gradient(135deg, #6366f1, #06b6d4)',
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            background: activeProgram === 'EEP' ? '#d97706' : '#2563eb',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#fff',
-            boxShadow: activeProgram === 'EEP'
-              ? '0 4px 12px rgba(245, 158, 11, 0.35)'
-              : '0 4px 12px rgba(99, 102, 241, 0.35)'
+            boxShadow: 'var(--shadow-sm)'
           }}>
-            {activeProgram === 'EEP' ? <Zap size={24} /> : <GraduationCap size={24} />}
+            {activeProgram === 'EEP' ? <Zap size={22} /> : <GraduationCap size={22} />}
           </div>
 
           <div>
@@ -1279,7 +1275,7 @@ export default function App() {
               <div style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                background: 'rgba(255, 255, 255, 0.06)',
+                background: 'var(--bg-card-hover)',
                 border: '1px solid var(--border-color)',
                 borderRadius: '8px',
                 padding: '2px',
@@ -1292,19 +1288,19 @@ export default function App() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.35rem',
-                    padding: '0.25rem 0.65rem',
+                    padding: '0.3rem 0.75rem',
                     borderRadius: '6px',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
                     border: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
-                    background: activeProgram === 'AI' ? 'linear-gradient(135deg, #6366f1, #06b6d4)' : 'transparent',
-                    color: activeProgram === 'AI' ? '#fff' : 'var(--text-muted)'
+                    background: activeProgram === 'AI' ? '#2563eb' : 'transparent',
+                    color: activeProgram === 'AI' ? '#ffffff' : 'var(--text-muted)'
                   }}
                   title="Switch active program track to Artificial Intelligence (AI)"
                 >
-                  <span>🤖</span>
+                  <Cpu size={14} />
                   <span>AI Track</span>
                 </button>
                 <button
@@ -1314,19 +1310,19 @@ export default function App() {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.35rem',
-                    padding: '0.25rem 0.65rem',
+                    padding: '0.3rem 0.75rem',
                     borderRadius: '6px',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
                     border: 'none',
                     cursor: 'pointer',
                     transition: 'all 0.15s ease',
-                    background: activeProgram === 'EEP' ? 'linear-gradient(135deg, #f59e0b, #ef4444)' : 'transparent',
-                    color: activeProgram === 'EEP' ? '#fff' : 'var(--text-muted)'
+                    background: activeProgram === 'EEP' ? '#d97706' : 'transparent',
+                    color: activeProgram === 'EEP' ? '#ffffff' : 'var(--text-muted)'
                   }}
                   title="Switch active program track to Energy and Electrical Power (EEP)"
                 >
-                  <span>⚡</span>
+                  <Zap size={14} />
                   <span>EEP Program</span>
                 </button>
               </div>
@@ -1350,9 +1346,8 @@ export default function App() {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.45rem',
-              background: activeProgram === 'EEP'
-                ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
-                : 'linear-gradient(135deg, #6366f1, #06b6d4)'
+              background: activeProgram === 'EEP' ? '#d97706' : '#2563eb',
+              borderColor: activeProgram === 'EEP' ? '#b45309' : '#1d4ed8'
             }}
           >
             <UserPlus size={16} />
@@ -1365,9 +1360,9 @@ export default function App() {
               className="btn btn-secondary"
               onClick={handleSaveProjectBackup}
               title="Save project backup (.degree.json) with all student selections and settings"
-              style={{ fontSize: '0.85rem', padding: '0.5rem 0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', borderColor: 'rgba(99, 102, 241, 0.4)' }}
+              style={{ fontSize: '0.85rem', padding: '0.5rem 0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
             >
-              <Save size={16} style={{ color: '#818cf8' }} />
+              <Save size={16} style={{ color: 'var(--accent-primary)' }} />
               <span>Save Backup</span>
             </button>
           )}
@@ -1379,7 +1374,7 @@ export default function App() {
             title="Edit and manage prerequisite links for each subject"
             style={{ fontSize: '0.85rem', padding: '0.5rem 0.95rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
           >
-            <GitFork size={16} style={{ color: '#818cf8' }} />
+            <GitFork size={16} style={{ color: 'var(--accent-primary)' }} />
             <span>Edit Prerequisites</span>
           </button>
 
@@ -1388,15 +1383,15 @@ export default function App() {
             className="btn btn-secondary"
             onClick={toggleTheme}
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
-            style={{ padding: '0.5rem', borderRadius: '10px' }}
+            style={{ padding: '0.5rem', borderRadius: '8px' }}
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
       </header>
 
-      {/* Main App Body */}
-      <main style={{ flex: 1, maxWidth: '1440px', margin: '0 auto', width: '100%', padding: '2rem 1.5rem' }}>
+      {/* Main App Body - Full width container */}
+      <main style={{ flex: 1, width: '100%', maxWidth: '100%', margin: 0, padding: '1.5rem 2rem', boxSizing: 'border-box' }}>
         {/* Upload Section */}
         <UploadZone
           activeProgram={activeProgram}
@@ -1417,17 +1412,18 @@ export default function App() {
         {statusMessage && (
           <div style={{
             padding: '0.75rem 1.25rem',
-            borderRadius: '12px',
-            background: 'rgba(99, 102, 241, 0.08)',
-            border: '1px solid rgba(99, 102, 241, 0.2)',
+            borderRadius: '8px',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-color)',
             fontSize: '0.85rem',
-            color: '#818cf8',
-            marginBottom: '1.5rem',
+            color: 'var(--text-primary)',
+            marginBottom: '1.25rem',
             display: 'flex',
             alignItems: 'center',
-            gap: '0.5rem'
+            gap: '0.6rem',
+            boxShadow: 'var(--shadow-sm)'
           }}>
-            <Sparkles size={16} />
+            <Info size={16} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
             <span>{statusMessage}</span>
           </div>
         )}
@@ -1511,9 +1507,8 @@ export default function App() {
                 style={{
                   fontSize: '0.9rem',
                   padding: '0.6rem 1.4rem',
-                  background: activeProgram === 'EEP'
-                    ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
-                    : 'linear-gradient(135deg, #6366f1, #06b6d4)',
+                  background: activeProgram === 'EEP' ? '#d97706' : '#2563eb',
+                  borderColor: activeProgram === 'EEP' ? '#b45309' : '#1d4ed8',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '0.5rem'
@@ -1530,11 +1525,13 @@ export default function App() {
       {/* Footer */}
       <footer style={{
         borderTop: '1px solid var(--border-color)',
-        padding: '1.5rem 2rem',
+        padding: '1.25rem 2rem',
         textAlign: 'center',
         fontSize: '0.8rem',
         color: 'var(--text-muted)',
-        background: 'var(--bg-card)'
+        background: 'var(--bg-secondary)',
+        width: '100%',
+        boxSizing: 'border-box'
       }}>
         East Port Said National University • Faculty of Engineering • AI Track &amp; Energy and Electrical Power (EEP) Degree Advising
       </footer>

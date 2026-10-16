@@ -30,24 +30,22 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
         {/* Left: Student Identity */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: isEep
-              ? 'linear-gradient(135deg, #eab308, #f97316)'
-              : 'linear-gradient(135deg, #6366f1, #06b6d4)',
+            width: '52px',
+            height: '52px',
+            borderRadius: '12px',
+            background: isEep ? '#d97706' : '#2563eb',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: isEep ? '#1c1917' : '#fff',
-            boxShadow: isEep ? '0 4px 14px rgba(234, 179, 8, 0.35)' : '0 4px 14px rgba(99, 102, 241, 0.3)'
+            color: '#fff',
+            boxShadow: 'var(--shadow-sm)'
           }}>
-            {isEep ? <Zap size={28} /> : <User size={28} />}
+            {isEep ? <Zap size={26} /> : <User size={26} />}
           </div>
 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+              <h1 style={{ fontSize: '1.4rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                 {student.studentName}
               </h1>
               {student.studentId && (
@@ -56,15 +54,15 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
                 </span>
               )}
               <span style={{
-                fontSize: '0.75rem',
+                fontSize: '0.72rem',
                 fontWeight: 700,
                 padding: '0.15rem 0.55rem',
-                borderRadius: '9999px',
-                background: isEep ? 'rgba(234, 179, 8, 0.2)' : 'rgba(99, 102, 241, 0.2)',
-                color: isEep ? '#fde047' : '#c7d2fe',
-                border: isEep ? '1px solid rgba(234, 179, 8, 0.4)' : '1px solid rgba(99, 102, 241, 0.4)'
+                borderRadius: '6px',
+                background: isEep ? 'rgba(217, 119, 6, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+                color: isEep ? '#d97706' : '#2563eb',
+                border: isEep ? '1px solid rgba(217, 119, 6, 0.3)' : '1px solid rgba(37, 99, 235, 0.3)'
               }}>
-                {isEep ? '⚡ EEP Program' : '🤖 AI Track'}
+                {isEep ? 'EEP Program' : 'AI Track'}
               </span>
               {onOpenCrossModal && (
                 <button
@@ -208,9 +206,9 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
               <div style={{
                 padding: '0.6rem 1rem',
                 borderRadius: '12px',
-                background: 'rgba(16, 185, 129, 0.15)',
-                border: '1px solid rgba(16, 185, 129, 0.4)',
-                boxShadow: '0 0 15px rgba(16, 185, 129, 0.2)',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                boxShadow: 'var(--shadow-sm)',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.6rem'
@@ -284,14 +282,14 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
                           ? 'rgba(245, 158, 11, 0.35)'
                           : 'rgba(16, 185, 129, 0.35)'
                       }`,
-                      boxShadow: isOverridden ? '0 0 16px rgba(56, 189, 248, 0.2)' : 'none',
+                      boxShadow: 'var(--shadow-sm)',
                       display: 'flex',
                       alignItems: 'center',
                       gap: '0.6rem'
                     }}
                   >
                     {isOverridden ? (
-                      <Unlock size={18} style={{ color: '#38bdf8' }} />
+                      <Unlock size={18} style={{ color: '#0284c7' }} />
                     ) : isWarning ? (
                       <ShieldAlert size={18} style={{ color: regLimit.tier === 'strict_warning' ? '#f43f5e' : '#f59e0b' }} />
                     ) : (
@@ -302,7 +300,7 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
                         fontSize: '1.1rem',
                         fontWeight: 800,
                         color: isOverridden
-                          ? '#38bdf8'
+                          ? '#0284c7'
                           : regLimit.tier === 'strict_warning'
                           ? '#f43f5e'
                           : regLimit.tier === 'academic_warning'
@@ -337,23 +335,23 @@ export default function StudentHeader({ student, onDeleteStudent, onOpenCrossMod
                         alignItems: 'center',
                         gap: '0.45rem',
                         cursor: 'pointer',
-                        transition: 'all 0.2s ease',
+                        transition: 'all 0.15s ease',
                         background: isOverridden
-                          ? 'rgba(56, 189, 248, 0.2)'
+                          ? 'rgba(2, 132, 199, 0.15)'
                           : isWarning
-                          ? 'rgba(56, 189, 248, 0.12)'
-                          : 'rgba(255, 255, 255, 0.05)',
+                          ? 'rgba(2, 132, 199, 0.08)'
+                          : 'var(--bg-secondary)',
                         border: isOverridden
-                          ? '1px solid rgba(56, 189, 248, 0.55)'
+                          ? '1px solid rgba(2, 132, 199, 0.45)'
                           : isWarning
-                          ? '1px solid rgba(56, 189, 248, 0.45)'
+                          ? '1px solid rgba(2, 132, 199, 0.35)'
                           : '1px solid var(--border-color)',
                         color: isOverridden
-                          ? '#38bdf8'
+                          ? '#0284c7'
                           : isWarning
-                          ? '#38bdf8'
+                          ? '#0284c7'
                           : 'var(--text-secondary)',
-                        boxShadow: isOverridden ? '0 0 14px rgba(56, 189, 248, 0.25)' : 'none'
+                        boxShadow: 'var(--shadow-sm)'
                       }}
                     >
                       {isOverridden ? (

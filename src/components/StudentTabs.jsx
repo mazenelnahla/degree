@@ -27,17 +27,17 @@ export default function StudentTabs({ students, activeIndex, onSelectTab, onOpen
               padding: '0.5rem 1rem',
               whiteSpace: 'nowrap',
               border: isActive
-                ? (isEep ? '1px solid #eab308' : '1px solid var(--border-focus)')
+                ? (isEep ? '1px solid #d97706' : '1px solid var(--border-focus)')
                 : '1px solid var(--border-color)',
               background: isActive
-                ? (isEep ? 'rgba(234, 179, 8, 0.12)' : 'var(--bg-secondary)')
-                : 'rgba(255, 255, 255, 0.02)'
+                ? (isEep ? 'rgba(217, 119, 6, 0.12)' : 'var(--bg-secondary)')
+                : 'transparent'
             }}
           >
             {isEep ? (
-              <Zap size={14} style={{ color: '#eab308' }} />
+              <Zap size={14} style={{ color: '#d97706' }} />
             ) : (
-              <User size={14} style={{ color: isActive ? '#818cf8' : 'var(--text-muted)' }} />
+              <User size={14} style={{ color: isActive ? 'var(--accent-primary)' : 'var(--text-muted)' }} />
             )}
 
             <span style={{
@@ -45,8 +45,8 @@ export default function StudentTabs({ students, activeIndex, onSelectTab, onOpen
               fontWeight: 800,
               padding: '0.08rem 0.35rem',
               borderRadius: '4px',
-              background: isEep ? 'rgba(234, 179, 8, 0.25)' : 'rgba(99, 102, 241, 0.2)',
-              color: isEep ? '#fde047' : '#c7d2fe',
+              background: isEep ? 'rgba(217, 119, 6, 0.15)' : 'rgba(37, 99, 235, 0.15)',
+              color: isEep ? '#d97706' : '#2563eb',
               letterSpacing: '0.02em'
             }}>
               {isEep ? 'EEP' : 'AI'}
