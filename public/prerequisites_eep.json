@@ -20,22 +20,6 @@
     "to": "MPE 112"
   },
   {
-    "from": "BSC 111",
-    "to": "EPM 241"
-  },
-  {
-    "from": "BSC 112",
-    "to": "MPE 231"
-  },
-  {
-    "from": "EPM 111",
-    "to": "EPM 221"
-  },
-  {
-    "from": "MPE 123",
-    "to": "EPM 221"
-  },
-  {
     "from": "MPE 122",
     "to": "MPE 241"
   },
@@ -112,14 +96,6 @@
     "to": "EPM 431"
   },
   {
-    "from": "EPM 412",
-    "to": "MPE 412"
-  },
-  {
-    "from": "BSC 031",
-    "to": "MPE 122"
-  },
-  {
     "from": "BSC 032",
     "to": "EPM 111"
   },
@@ -130,5 +106,25 @@
   {
     "from": "PRD 031",
     "to": "PRD 133"
+  },
+  {
+    "from": "MPE 411",
+    "to": "MPE 412"
+  },
+  {
+    "from": "BSC 032",
+    "to": "MPE 122"
+  },
+  {
+    "from": "MPE 131",
+    "to": "MPE 231"
+  },
+  {
+    "from": "MPE 112",
+    "to": "EPM 221"
+  },
+  {
+    "from": "CCE 121",
+    "to": "EPM 241"
   }
 ]
